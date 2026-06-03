@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - CardTree Bookmarks</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      max-width: 760px; margin: 0 auto; padding: 40px 24px;
+      color: #1e293b; line-height: 1.8;
+      background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 50%, #fef3f2 100%);
+      min-height: 100vh;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    h1 {
+      font-size: 28px; margin: 0 0 4px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle { color: #64748b; font-size: 15px; margin-bottom: 36px; }
+    .lang-toggle {
+      display: inline-flex; border-radius: 8px; overflow: hidden;
+      border: 1px solid #e2e8f0; margin-bottom: 32px;
+    }
+    .lang-toggle button {
+      padding: 6px 20px; border: none; background: white;
+      font-size: 14px; cursor: pointer; color: #64748b;
+      transition: all 0.2s;
+    }
+    .lang-toggle button.active {
+      background: #6366f1; color: white;
+    }
+    .lang-toggle button:hover:not(.active) { background: #f1f5f9; }
+    .content { display: none; }
+    .content.active { display: block; }
+    h2 {
+      font-size: 18px; margin-top: 32px; margin-bottom: 12px;
+      color: #334155; padding-left: 12px;
+      border-left: 3px solid #6366f1;
+    }
+    p { margin: 8px 0; }
+    a { color: #6366f1; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul { padding-left: 20px; }
+    li { margin: 6px 0; }
+    li strong { color: #4f46e5; }
+    code {
+      background: #f1f5f9; padding: 2px 6px; border-radius: 4px;
+      font-size: 0.9em; color: #6366f1;
+    }
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 12px;
+      font-size: 12px; font-weight: 500;
+      background: #ede9fe; color: #6d28d9;
+    }
+    @media (max-width: 640px) {
+      .card { padding: 24px; }
+      h1 { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>CardTree Bookmarks</h1>
+    <p class="subtitle">Privacy Policy &nbsp;<span class="badge">v1.0.0</span></p>
+
+    <div class="lang-toggle">
+      <button class="active" onclick="switchLang('en')">English</button>
+      <button onclick="switchLang('zh')">中文</button>
+    </div>
+
+    <!-- English -->
+    <div id="en" class="content active">
+      <p class="subtitle" style="margin-top:0">Last updated: June 3, 2026</p>
+
+      <h2>Overview</h2>
+      <p>CardTree Bookmarks is a Chrome extension that replaces the default new tab page with a card-tree bookmark manager. We respect your privacy and are committed to protecting your personal data.</p>
+
+      <h2>Data Collection</h2>
+      <p><strong>CardTree Bookmarks does not collect, transmit, or store any personal data on external servers.</strong> All data is stored locally on your device using Chrome's built-in <code>chrome.storage.local</code> API.</p>
+
+      <h2>Permissions</h2>
+      <ul>
+        <li><strong>bookmarks</strong> &mdash; Required to read, create, move, and delete your bookmarks.</li>
+        <li><strong>storage</strong> &mdash; Used to save your preferences (theme, display settings, trash items) locally.</li>
+        <li><strong>favicon</strong> &mdash; Used to display website icons next to bookmarks.</li>
+        <li><strong>tabs</strong> &mdash; Used to open bookmarks in new tabs and track active tab state for visit counting.</li>
+        <li><strong>sessions</strong> &mdash; Used to show recently closed tabs on the new tab page.</li>
+      </ul>
+
+      <h2>Data Storage</h2>
+      <p>All data remains on your device. No data is sent to any server, API, or third-party service. If you uninstall the extension, all locally stored data is removed.</p>
+
+      <h2>Third-Party Services</h2>
+      <p>This extension does not integrate with or send data to any third-party services, analytics platforms, or advertising networks.</p>
+
+      <h2>Changes</h2>
+      <p>We may update this privacy policy from time to time. Any changes will be reflected on this page with an updated date.</p>
+
+      <h2>Contact</h2>
+      <p>If you have questions about this privacy policy, please open an issue on our <a href="https://github.com/Dcx199302/cardtree-bookmarks-ext">GitHub repository</a>.</p>
+    </div>
+
+    <!-- 中文 -->
+    <div id="zh" class="content">
+      <p class="subtitle" style="margin-top:0">最后更新：2026 年 6 月 3 日</p>
+
+      <h2>概述</h2>
+      <p>CardTree Bookmarks 是一款 Chrome 浏览器扩展，将默认新标签页替换为卡片树书签管理器。我们尊重您的隐私，致力于保护您的个人数据。</p>
+
+      <h2>数据收集</h2>
+      <p><strong>CardTree Bookmarks 不会收集、传输或在外部服务器上存储任何个人数据。</strong>所有数据均通过 Chrome 内置的 <code>chrome.storage.local</code> API 存储在您的本地设备上。</p>
+
+      <h2>权限说明</h2>
+      <ul>
+        <li><strong>bookmarks（书签）</strong> &mdash; 用于读取、创建、移动和删除您的书签。</li>
+        <li><strong>storage（存储）</strong> &mdash; 用于在本地保存您的偏好设置（主题、显示设置、回收站项目）。</li>
+        <li><strong>favicon（图标）</strong> &mdash; 用于在书签旁显示网站图标。</li>
+        <li><strong>tabs（标签页）</strong> &mdash; 用于在新标签页中打开书签，并追踪活动标签页状态以统计访问次数。</li>
+        <li><strong>sessions（会话）</strong> &mdash; 用于在新标签页上显示最近关闭的标签页。</li>
+      </ul>
+
+      <h2>数据存储</h2>
+      <p>所有数据均保存在您的设备上，不会发送到任何服务器、API 或第三方服务。卸载扩展后，所有本地存储的数据将被清除。</p>
+
+      <h2>第三方服务</h2>
+      <p>本扩展不集成、不向任何第三方服务、分析平台或广告网络发送数据。</p>
+
+      <h2>政策变更</h2>
+      <p>我们可能会不时更新本隐私政策。任何变更将在此页面上以更新日期的形式体现。</p>
+
+      <h2>联系方式</h2>
+      <p>如果您对本隐私政策有任何疑问，请在我们的 <a href="https://github.com/Dcx199302/cardtree-bookmarks-ext">GitHub 仓库</a> 中提交 Issue。</p>
+    </div>
+  </div>
+
+  <script>
+    function switchLang(lang) {
+      document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
+      document.getElementById(lang).classList.add('active');
+      document.querySelectorAll('.lang-toggle button').forEach(btn => btn.classList.remove('active'));
+      document.querySelector(`.lang-toggle button[onclick="switchLang('${lang}')"]`).classList.add('active');
+    }
+  </script>
+</body>
+</html>
