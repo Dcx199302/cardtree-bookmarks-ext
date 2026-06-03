@@ -1,0 +1,114 @@
+<svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="128"
+    height="128"
+    viewBox="0 0 128 128"
+>
+    <defs>
+        <linearGradient id="mainCard" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#4285F4"/>
+            <stop offset="100%" stop-color="#3B78E7"/>
+        </linearGradient>
+
+    </defs>
+
+    <!-- Background -->
+    <rect
+        width="128"
+        height="128"
+        rx="28"
+        fill="#F8FAFC"
+    />
+
+    <g>
+
+        <!-- 1+4+7 -->
+        <rect
+            x="10"
+            y="10"
+            width="36"
+            height="108"
+            rx="12"
+            fill="url(#mainCard)"
+            stroke="#FFFFFF"
+            stroke-width="2"
+        />
+
+        <!-- 3 -->
+        <rect
+            x="88"
+            y="10"
+            width="30"
+            height="34"
+            rx="10"
+            fill="#34A853"
+            stroke="#FFFFFF"
+            stroke-width="2"
+        />
+
+        <!-- 5+6 -->
+        <rect
+            x="50"
+            y="50"
+            width="68"
+            height="32"
+            rx="10"
+            fill="#FBBC05"
+            stroke="#FFFFFF"
+            stroke-width="2"
+        />
+
+        <!-- 8 -->
+        <rect
+            x="50"
+            y="88"
+            width="32"
+            height="30"
+            rx="10"
+            fill="#EA4335"
+            stroke="#FFFFFF"
+            stroke-width="2"
+        />
+
+        <!-- Star 2 -->
+        <path
+            d="M66 14
+               L70.9 24
+               L82 25.6
+               L74 33.4
+               L75.9 44.3
+               L66 39.1
+               L56.1 44.3
+               L58 33.4
+               L50 25.6
+               L61.1 24
+               Z"
+            fill="none"
+            stroke="#4285F4"
+            stroke-width="4.5"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+        />
+
+        <!-- Star 9 -->
+        <path
+            d="M102 88
+               L106.9 98
+               L118 99.6
+               L110 107.4
+               L111.9 118.3
+               L102 113.1
+               L92.1 118.3
+               L94 107.4
+               L86 99.6
+               L97.1 98
+               Z"
+            fill="none"
+            stroke="#34A853"
+            stroke-width="4.5"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+        />
+
+    </g>
+</svg>
