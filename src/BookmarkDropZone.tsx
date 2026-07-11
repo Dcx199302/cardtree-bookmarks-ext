@@ -192,7 +192,22 @@ export function RootBookmarksCard({ sections, recentVisits, isSearching }: { sec
     <div className="root-bookmarks-card">
       {showRecent && (
         <div className="root-recent-section">
-          <div className="root-recent-section__label">最近关闭</div>
+          <div className="root-recent-section__label">
+            最近关闭
+            <button
+              className="root-recent-section__history-btn"
+              title="打开历史记录"
+              onClick={() => {
+                try { chrome.tabs.create({ url: 'chrome://history/' }); }
+                catch { window.open('chrome://history/', '_blank'); }
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </button>
+          </div>
           <div className="root-recent-section__grid">
             {recentVisits.map((item, i) => (
               <a
