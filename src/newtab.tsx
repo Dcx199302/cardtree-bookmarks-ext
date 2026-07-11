@@ -21,6 +21,8 @@ import { findBookmarkFolderId, findNodeInTree, addBookmarkToNodes, updateBookmar
 import { clampIndex, findDropTarget, resolveChromeInsertIndex, captureBookmarkItemRects, animateBookmarkItemReflow, applyBookmarkFlip, animateFlyIn, TOOLTIP_SHOW_DELAY_MS, measureTextWidth } from './bookmarkDragDom';
 import { useTheme } from './useTheme';
 import { ConfirmDialog } from './ConfirmDialog';
+import { loadSearchEngines, saveSearchEngines, type SearchEngine, MAX_VISIBLE } from './searchEnginesStore';
+import { SearchEngineSettingsDialog } from './SearchEngineSettingsDialog';
 import { FloatingBookmarkGhost, RubberBandOverlay } from './bookmarkDragUI';
 import { BookmarkFolderCard, RootBookmarksCard } from './BookmarkDropZone';
 import '@xuchengdong/cardtree-react/styles/cascade.css';
@@ -149,6 +151,8 @@ function NewTab() {
   const [parentTitleMap, setParentTitleMap] = useState<Map<string, string>>(new Map());
   const [trashToast, setTrashToast] = useState<{ text: string; isWarning: boolean } | null>(null);
   const trashToastTimerRef = useRef<number | null>(null);
+  const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([]);
+  const [showEngineSettings, setShowEngineSettings] = useState(false);
   const [recentVisits, setRecentVisits] = useState<{ title: string; url: string; lastVisitTime: number }[]>([]);
   const [focusedBookmarkId, setFocusedBookmarkId] = useState<string | null>(null);
   const [prefocusedBookmarkId, setPrefocusedBookmarkIdRaw] = useState<string | null>(null);
@@ -269,6 +273,7 @@ function NewTab() {
       }).catch(() => {});
       loadTrash().then(setTrashItems).catch(() => {});
       loadNavRailOrder().then(setNavRailOrder).catch(() => {});
+      loadSearchEngines().then(setSearchEngines).catch(() => {});
     }).catch(() => setLoading(false));
   }, []);
 
@@ -1250,8 +1255,18 @@ function NewTab() {
     setLastClickedId(targetId);
   }, [lastClickedId, bookmarkDataMap]);
 
-  const isSearching = !!searchQuery;
-  const hasNoResults = isSearching && sortedRootSections.length === 0 && sortedSubNodes.length === 0;
+ const isSearching = !!searchQuery;
+ const hasNoResults = isSearching && sortedRootSections.length === 0 && sortedSubNodes.length === 0;
+
+  const visibleEngines = useMemo(
+    () => searchEngines.filter(e => e.enabled).slice(0, MAX_VISIBLE),
+    [searchEngines],
+  );
+
+  const handleSearchEnginesChange = useCallback((engines: SearchEngine[]) => {
+    setSearchEngines(engines);
+    saveSearchEngines(engines).catch(() => {});
+  }, []);
 
   if (loading) {
     return (
@@ -1318,9 +1333,9 @@ function NewTab() {
             <path d="M102 88L106.9 98L118 99.6L110 107.4L111.9 118.3L102 113.1L92.1 118.3L94 107.4L86 99.6L97.1 98Z" fill="none" stroke="#34A853" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round"/>
           </svg>
           <h1 className="newtab-title">CardTree</h1>
-          <div className="newtab-header-search">
-            <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} />
-          </div>
+         <div className="newtab-header-search">
+            <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} />
+         </div>
           <div className="header-actions" style={{ position: 'relative' }}>
             <a className="header-btn" href="https://github.com/Dcx199302/cardtree-bookmarks-ext" target="_blank" rel="noopener noreferrer"
               onMouseEnter={(e) => showTooltip(e, 'GitHub 仓库')}
@@ -1400,8 +1415,16 @@ function NewTab() {
         <BookmarkDialog state={dialogState} onSave={handleSaveDialog} onMove={moveBookmarkToFolder} onBatchMove={handleBatchMove} onCancel={() => setDialogState(null)} />
       )}
 
-      {confirmState && (
-        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={() => setConfirmState(null)} />
+     {confirmState && (
+       <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={() => setConfirmState(null)} />
+     )}
+
+      {showEngineSettings && (
+        <SearchEngineSettingsDialog
+          engines={searchEngines}
+          onChange={handleSearchEnginesChange}
+          onClose={() => setShowEngineSettings(false)}
+        />
       )}
 
       {tooltip && (
