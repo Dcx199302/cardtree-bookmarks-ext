@@ -204,7 +204,6 @@ export function captureBookmarkItemRects(): Map<string, DOMRect> {
 }
 
 export function animateBookmarkItemReflow(beforeRects: Map<string, DOMRect>): void {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   requestAnimationFrame(() => {
     applyBookmarkFlip(beforeRects, 220);
   });
@@ -241,7 +240,6 @@ export function animateFlyIn(
   origin: { left: number; top: number; width: number; height: number },
   duration: number
 ): void {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const el = document.querySelector<HTMLElement>(`[data-bookmark-item-id="${itemId}"]`);
   if (!el) return;
   const target = el.getBoundingClientRect();

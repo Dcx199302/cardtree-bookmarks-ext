@@ -136,8 +136,14 @@ function NewTab() {
   const [isBookmarkDragging, setIsBookmarkDragging] = useState(false);
   const [activeBookmarkDrag, setActiveBookmarkDrag] = useState<ActiveBookmarkDrag | null>(null);
   const [dragPreview, setDragPreviewState] = useState<{ folderId: string; dropIndex: number } | null>(null);
-  const [dropGhost, setDropGhost] = useState<ActiveBookmarkDrag | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+ const [dropGhost, setDropGhost] = useState<ActiveBookmarkDrag | null>(null);
+  // 放置后 FLIP 动画的触发器：与 setNodes 同批提交，确保 useLayoutEffect
+  // 在 DOM commit 后同步执行，元素已就位，animateFlyIn 不会因查不到节点而静默失败。
+  const [pendingDropAnim, setPendingDropAnim] = useState<{
+    flyIn: Array<{ id: string; origin: { left: number; top: number; width: number; height: number } }>;
+    flipRects: Map<string, DOMRect>;
+  } | null>(null);
+ const [searchQuery, setSearchQuery] = useState('');
   const [menuState, setMenuState] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [confirmState, setConfirmState] = useState<{ message: string; action: () => Promise<void> } | null>(null);
@@ -650,16 +656,26 @@ function NewTab() {
     if (!beforeRects) return;
     pendingDragFlipRef.current = null;
     if (!isBookmarkDragging) return;
-    applyBookmarkFlip(beforeRects, 150);
-  }, [dragPreview, isBookmarkDragging]);
+   applyBookmarkFlip(beforeRects, 150);
+ }, [dragPreview, isBookmarkDragging]);
 
-  const clearDropGhostLater = useCallback((ghost: ActiveBookmarkDrag) => {
-    setDropGhost(ghost);
-    if (dropGhostTimerRef.current != null) {
-      window.clearTimeout(dropGhostTimerRef.current);
-    }
-    dropGhostTimerRef.current = window.setTimeout(() => setDropGhost(null), 180);
-  }, []);
+  // 放置后飞入 + 重排动画：在 useLayoutEffect 中同步执行，保证 DOM 已提交。
+ useLayoutEffect(() => {
+   if (!pendingDropAnim) return;
+   applyBookmarkFlip(pendingDropAnim.flipRects, 220);
+   for (const { id, origin } of pendingDropAnim.flyIn) {
+     animateFlyIn(id, origin, 280);
+   }
+   setPendingDropAnim(null);
+ }, [pendingDropAnim]);
+
+ const clearDropGhostLater = useCallback((ghost: ActiveBookmarkDrag) => {
+   setDropGhost(ghost);
+   if (dropGhostTimerRef.current != null) {
+     window.clearTimeout(dropGhostTimerRef.current);
+   }
+    dropGhostTimerRef.current = window.setTimeout(() => setDropGhost(null), 150);
+ }, []);
 
   const isNoOpBookmarkMove = useCallback((bookmarkId: string, sourceFolderId: string, targetFolderId: string, dropIndex: number): boolean => {
     if (sourceFolderId !== targetFolderId) return false;
@@ -709,11 +725,11 @@ function NewTab() {
       return result;
     });
 
-    requestAnimationFrame(() => {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      applyBookmarkFlip(beforeRects, 220);
-      if (ghostRect) animateFlyIn(bookmarkId, ghostRect, 260);
-    });
+  // 与 setNodes 同批提交，确保飞入动画在 DOM commit 后的 useLayoutEffect 中播放。
+  setPendingDropAnim({
+     flyIn: ghostRect ? [{ id: bookmarkId, origin: ghostRect }] : [],
+     flipRects: beforeRects,
+   });
 
     pendingSelfMoveIdsRef.current.set(bookmarkId, Date.now() + 1500);
     try {
@@ -841,11 +857,11 @@ function NewTab() {
         }
        const drag = currentDrag ?? { ...start, currentX: dropPoint.x, currentY: dropPoint.y };
 
-        // 捕获 ghost 位置，用于落下后的 fly-in 动画
-        const ghostEl = document.querySelector<HTMLElement>('.bookmark-drag-ghost--floating:not(.is-dropping)');
-        const ghostRect = ghostEl ? ghostEl.getBoundingClientRect() : null;
+       // 捕获 ghost 位置，用于落下后的 fly-in 动画
+       const ghostEl = document.querySelector<HTMLElement>('.bookmark-drag-ghost--floating:not(.is-dropping)');
+      const ghostRect = ghostEl ? ghostEl.getBoundingClientRect() : null;
 
-        if (started) {
+       if (started) {
           clearDropGhostLater(drag);
           markBookmarkDragCompleted();
         }
@@ -870,14 +886,11 @@ function NewTab() {
                 data.splice(dropIdx, 0, ...batchBookmarks);
                 return withBookmarkData(n, data);
               });
-              return result;
+             return result;
             });
-            requestAnimationFrame(() => {
-              if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-              applyBookmarkFlip(beforeRects, 220);
-              if (ghostRect) {
-                for (const bm of batchBookmarks) animateFlyIn(bm.id, ghostRect, 260);
-              }
+            setPendingDropAnim({
+              flyIn: ghostRect ? batchBookmarks.map(bm => ({ id: bm.id, origin: ghostRect })) : [],
+              flipRects: beforeRects,
             });
             clearSelection();
             (async () => {
@@ -890,8 +903,14 @@ function NewTab() {
                 }
               }
             })();
-          } else if (!isNoOpBookmarkMove(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex)) {
-            moveBookmarkBetweenFolders(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex, ghostRect);
+         } else if (!isNoOpBookmarkMove(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex)) {
+           moveBookmarkBetweenFolders(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex, ghostRect);
+         } else if (ghostRect) {
+         // 无效放置或原地 no-op：从鼠标位置飞回原始位置（回弹动画）。
+          setPendingDropAnim({
+             flyIn: [{ id: start.bookmark.id, origin: ghostRect }],
+             flipRects: new Map(),
+           });
           }
         }
 
