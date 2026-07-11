@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 export interface MenuItem {
   label: string;
   icon?: ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
   danger?: boolean;
   separator?: boolean;
 }
@@ -51,7 +51,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
           <button
             key={i}
             className={`context-menu-item${item.danger ? ' context-menu-item--danger' : ''}`}
-            onClick={() => { item.onClick(); onClose(); }}
+            onClick={() => { item.onClick?.(); onClose(); }}
           >
             {item.icon && <span>{item.icon}</span>}
             {item.label}

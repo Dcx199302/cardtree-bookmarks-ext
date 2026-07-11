@@ -1333,6 +1333,14 @@ body {
   :root:not([data-theme="light"]) .cascade-node-heading-row:hover .cascade-heading-dash { border-color: var(--accent); }
 }
 
+/* ── 首次加载时禁用入场和折叠动画 ── */
+.suppress-init-anim .cascade-node.is-entering {
+  animation: none;
+}
+.suppress-init-anim .cascade-node-body-row {
+  transition: none !important;
+}
+
 /* ── Header badge & active states ── */
 .header-btn--badge {
   position: relative;

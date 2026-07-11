@@ -131,6 +131,7 @@ function NewTab() {
   const bookmarkFolderMapRef = useRef<Map<string, string>>(new Map());
   const [nodes, setNodes] = useState<CardTreeNode<BookmarkItem[]>[]>([]);
   const [loading, setLoading] = useState(true);
+  const [suppressAnim, setSuppressAnim] = useState(true);
   const [navRailOrder, setNavRailOrder] = useState<NavRailOrder>({});
   const [isBookmarkDragging, setIsBookmarkDragging] = useState(false);
   const [activeBookmarkDrag, setActiveBookmarkDrag] = useState<ActiveBookmarkDrag | null>(null);
@@ -276,6 +277,14 @@ function NewTab() {
       loadSearchEngines().then(setSearchEngines).catch(() => {});
     }).catch(() => setLoading(false));
   }, []);
+
+  // 首次加载完成后恢复动画（避免入场/折叠动画在初始渲染时执行）
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => setSuppressAnim(false), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   const loadRecentVisits = useCallback(() => {
     if (!chrome.sessions) return;
@@ -928,7 +937,28 @@ function NewTab() {
       openMenu(e, [
         ...(!isRoot ? [
           { label: '新建子文件夹', onClick: () => setDialogState({ mode: 'add-folder', targetId: '', parentId: sourceId }) },
-          { label: '新建书签', onClick: () => setDialogState({ mode: 'add-bookmark', targetId: '', parentId: sourceId }) },
+         { label: '新建书签', onClick: () => setDialogState({ mode: 'add-bookmark', targetId: '', parentId: sourceId }) },
+        { separator: true, label: '', onClick: () => {} },
+      ] : []),
+        ...(!isRoot ? [
+          { label: '展开（含子级）', onClick: () => {
+            const ref = treeRef.current;
+            if (!ref) return;
+            ref.expandNode(sourceId);
+            (function walk(n: CardTreeNode<BookmarkItem[]> | undefined) {
+              if (!n) return;
+              for (const c of n.children) { ref.expandNode(c.id); walk(c); }
+            })(findNodeInTree(latestNodesRef.current, sourceId) ?? undefined);
+          } },
+          { label: '折叠（含子级）', onClick: () => {
+            const ref = treeRef.current;
+            if (!ref) return;
+            ref.collapseNode(sourceId);
+            (function walk(n: CardTreeNode<BookmarkItem[]> | undefined) {
+              if (!n) return;
+              for (const c of n.children) { if (c.children.length > 0) ref.collapseNode(c.id); walk(c); }
+            })(findNodeInTree(latestNodesRef.current, sourceId) ?? undefined);
+          } },
           { separator: true, label: '', onClick: () => {} },
         ] : []),
         { label: currentLarge ? '切换为小图标' : '切换为大图标', onClick: () => toggleFolderDisplaySize(sourceId, isRoot || isTopLevelCard) },
@@ -963,6 +993,16 @@ function NewTab() {
     e.preventDefault();
     openMenu(e, [
       { label: '新建文件夹', onClick: () => setDialogState({ mode: 'add-folder', targetId: '', parentId: '1' }) },
+      { label: '', separator: true },
+      { label: '全部展开', onClick: () => {
+        treeRef.current?.expandAll();
+        saveCollapsedIds([]).catch(() => {});
+      } },
+      { label: '全部折叠', onClick: () => {
+        treeRef.current?.collapseAll();
+        const ids = subFolderNodes.map(n => n.id);
+        saveCollapsedIds(ids).catch(() => {});
+      } },
     ]);
   };
 
@@ -1385,10 +1425,11 @@ function NewTab() {
 
         <RootBookmarksCard sections={sortedRootSections} recentVisits={recentVisits} isSearching={!!searchQuery} />
 
-        {sortedSubNodes.length > 0 ? (
+       {sortedSubNodes.length > 0 ? (
           <CardTree
-            ref={treeRef}
-            nodes={sortedSubNodes}
+            className={suppressAnim ? 'suppress-init-anim' : undefined}
+           ref={treeRef}
+           nodes={sortedSubNodes}
             renderNode={(node) => <BookmarkFolderCard node={node} bookmarks={bookmarkDataMap.get(node.sourceId) ?? []} />}
             selectable={false}
             dragDrop={dragDropConfig}
