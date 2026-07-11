@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { StrictMode, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
 import { Subject, fromEvent, merge, animationFrameScheduler, Subscription } from 'rxjs';
@@ -18,7 +18,7 @@ import type { NavItem } from './NavRail';
 import { loadFolderDisplaySettings, setFolderDisplaySize, cleanupOrphanedSettings, loadCollapsedIds, saveCollapsedIds, loadNavRailOrder, saveNavRailOrder, type FolderDisplaySizeSettings, type NavRailOrder } from './folderDisplaySettings';
 import { MenuContext, type BookmarkPointerDragStart, type ActiveBookmarkDrag, type RubberBandState } from './menuContextTypes';
 import { findBookmarkFolderId, findNodeInTree, addBookmarkToNodes, updateBookmarkInNodes, removeBookmarkFromNodes, addFolderToNodes, renameFolderInNodes, removeFolderFromNodes, filterTree, toggleSelection, rangeSelect, withBookmarkData, findAndUpdateNode } from './bookmarkTreeHelpers';
-import { clampIndex, findDropTarget, resolveChromeInsertIndex, captureBookmarkItemRects, animateBookmarkItemReflow, TOOLTIP_SHOW_DELAY_MS, measureTextWidth } from './bookmarkDragDom';
+import { clampIndex, findDropTarget, resolveChromeInsertIndex, captureBookmarkItemRects, animateBookmarkItemReflow, applyBookmarkFlip, animateFlyIn, TOOLTIP_SHOW_DELAY_MS, measureTextWidth } from './bookmarkDragDom';
 import { useTheme } from './useTheme';
 import { ConfirmDialog } from './ConfirmDialog';
 import { FloatingBookmarkGhost, RubberBandOverlay } from './bookmarkDragUI';
@@ -125,6 +125,7 @@ function NewTab() {
   const dragPreviewRef = useRef<{ folderId: string; dropIndex: number } | null>(null);
   const pointerPositionRef = useRef<{ x: number; y: number } | null>(null);
   const suppressBookmarkClickUntilRef = useRef(0);
+  const pendingDragFlipRef = useRef<Map<string, DOMRect> | null>(null);
   const bookmarkFolderMapRef = useRef<Map<string, string>>(new Map());
   const [nodes, setNodes] = useState<CardTreeNode<BookmarkItem[]>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -609,6 +610,7 @@ function NewTab() {
     const previousPointer = pointerPositionRef.current;
     const pointerDelta = previousPointer ? { dx: clientX - previousPointer.x, dy: clientY - previousPointer.y } : null;
     pointerPositionRef.current = { x: clientX, y: clientY };
+    const beforeRects = captureBookmarkItemRects();
     setDragPreviewState(prev => {
       const next = findDropTarget(clientX, clientY, prev, pointerDelta);
       if (!next) {
@@ -620,9 +622,22 @@ function NewTab() {
         return prev;
       }
       dragPreviewRef.current = next;
-      return next;
+     pendingDragFlipRef.current = beforeRects;
+     return next;
     });
   }, []);
+
+  // FLIP animation while dragging: when dragPreview changes, surrounding
+  // bookmark items reflow (placeholder slot moves). Capture-before pattern is
+  // set in updateDragPreview; here we synchronously animate the inverted
+  // transform pre-paint so items glide instead of snapping.
+  useLayoutEffect(() => {
+    const beforeRects = pendingDragFlipRef.current;
+    if (!beforeRects) return;
+    pendingDragFlipRef.current = null;
+    if (!isBookmarkDragging) return;
+    applyBookmarkFlip(beforeRects, 150);
+  }, [dragPreview, isBookmarkDragging]);
 
   const clearDropGhostLater = useCallback((ghost: ActiveBookmarkDrag) => {
     setDropGhost(ghost);
@@ -652,41 +667,48 @@ function NewTab() {
     bookmarkId: string,
     sourceFolderId: string,
     targetFolderId: string,
-    dropIndex: number
+    dropIndex: number,
+    ghostRect?: { left: number; top: number; width: number; height: number } | null
   ) => {
     if (!bookmarkId || !sourceFolderId || !targetFolderId) return;
+    const snapshot = latestNodesRef.current;
+    const sourceNode = findNodeInTree(snapshot, sourceFolderId);
+    const targetNode = findNodeInTree(snapshot, targetFolderId);
+    if (!sourceNode || !targetNode) return;
+    const bm = (sourceNode.data ?? []).find(b => b.id === bookmarkId);
+    if (!bm) return;
+    if (isNoOpBookmarkMove(bookmarkId, sourceFolderId, targetFolderId, dropIndex)) return;
+
+    const beforeRects = captureBookmarkItemRects();
+
+    // 乐观更新先于 chrome API：确保 setNodes 与 endSub 中清除拖拽状态
+    // 在同一渲染批次提交，避免源位置短暂闪现被拖元素。
+    setNodes(prev => {
+      let result = findAndUpdateNode(prev, sourceFolderId, n => withBookmarkData(n, (n.data ?? []).filter(b => b.id !== bookmarkId)));
+      const targetData = findNodeInTree(result, targetFolderId)?.data ?? [];
+      const spliceIdx = Math.min(dropIndex, targetData.length);
+      result = findAndUpdateNode(result, targetFolderId, n => {
+        const data = [...(n.data ?? [])];
+        data.splice(spliceIdx, 0, bm);
+        return withBookmarkData(n, data);
+      });
+      return result;
+    });
+
+    requestAnimationFrame(() => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      applyBookmarkFlip(beforeRects, 220);
+      if (ghostRect) animateFlyIn(bookmarkId, ghostRect, 260);
+    });
+
+    pendingSelfMoveIdsRef.current.set(bookmarkId, Date.now() + 1500);
     try {
-      const snapshot = latestNodesRef.current;
-      const sourceNode = findNodeInTree(snapshot, sourceFolderId);
-      const targetNode = findNodeInTree(snapshot, targetFolderId);
-      if (!sourceNode || !targetNode) return;
-      const bm = (sourceNode?.data ?? []).find(b => b.id === bookmarkId);
-      if (!bm) return;
-      if (isNoOpBookmarkMove(bookmarkId, sourceFolderId, targetFolderId, dropIndex)) return;
-
-      const beforeRects = captureBookmarkItemRects();
-
-      pendingSelfMoveIdsRef.current.set(bookmarkId, Date.now() + 1500);
-
       const children = await chrome.bookmarks.getChildren(targetFolderId);
       const bookmarkChildren = children.filter(c => c.url);
       const insertIndex = resolveChromeInsertIndex(children, bookmarkChildren, dropIndex);
       const destination: chrome.bookmarks.BookmarkDestinationArg = { parentId: targetFolderId };
       if (insertIndex !== undefined) destination.index = insertIndex;
       await chrome.bookmarks.move(bookmarkId, destination);
-
-      setNodes(prev => {
-        let result = findAndUpdateNode(prev, sourceFolderId, n => withBookmarkData(n, (n.data ?? []).filter(b => b.id !== bookmarkId)));
-        const targetData = findNodeInTree(result, targetFolderId)?.data ?? [];
-        const spliceIdx = Math.min(dropIndex, targetData.length);
-        result = findAndUpdateNode(result, targetFolderId, n => {
-          const data = [...(n.data ?? [])];
-          data.splice(spliceIdx, 0, bm);
-          return withBookmarkData(n, data);
-        });
-        return result;
-      });
-      animateBookmarkItemReflow(beforeRects);
     } catch (e) {
       console.error('移动书签失败:', e);
       reload();
@@ -803,7 +825,11 @@ function NewTab() {
           dragPreviewRef.current = finalTarget;
           setDragPreviewState(finalTarget);
         }
-        const drag = currentDrag ?? { ...start, currentX: dropPoint.x, currentY: dropPoint.y };
+       const drag = currentDrag ?? { ...start, currentX: dropPoint.x, currentY: dropPoint.y };
+
+        // 捕获 ghost 位置，用于落下后的 fly-in 动画
+        const ghostEl = document.querySelector<HTMLElement>('.bookmark-drag-ghost--floating:not(.is-dropping)');
+        const ghostRect = ghostEl ? ghostEl.getBoundingClientRect() : null;
 
         if (started) {
           clearDropGhostLater(drag);
@@ -818,6 +844,28 @@ function NewTab() {
             const batchBookmarks = batchIds
               .map(id => (sourceNode?.data ?? []).find(b => b.id === id))
               .filter((b): b is BookmarkItem => !!b);
+            // 乐观更新先于 chrome API
+            setNodes(prev => {
+              let result = prev;
+              for (const bm of batchBookmarks) {
+                result = removeBookmarkFromNodes(result, start.sourceFolderId, bm.id);
+              }
+              const dropIdx = clampIndex(finalTarget.dropIndex, (findNodeInTree(result, finalTarget.folderId)?.data ?? []).length);
+              result = findAndUpdateNode(result, finalTarget.folderId, n => {
+                const data = [...(n.data ?? [])];
+                data.splice(dropIdx, 0, ...batchBookmarks);
+                return withBookmarkData(n, data);
+              });
+              return result;
+            });
+            requestAnimationFrame(() => {
+              if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+              applyBookmarkFlip(beforeRects, 220);
+              if (ghostRect) {
+                for (const bm of batchBookmarks) animateFlyIn(bm.id, ghostRect, 260);
+              }
+            });
+            clearSelection();
             (async () => {
               for (const bm of batchBookmarks) {
                 pendingSelfMoveIdsRef.current.set(bm.id, Date.now() + 1500);
@@ -827,24 +875,9 @@ function NewTab() {
                   console.error('批量拖动移动失败:', err);
                 }
               }
-              setNodes(prev => {
-                let result = prev;
-                for (const bm of batchBookmarks) {
-                  result = removeBookmarkFromNodes(result, start.sourceFolderId, bm.id);
-                }
-                const dropIdx = clampIndex(finalTarget.dropIndex, (findNodeInTree(result, finalTarget.folderId)?.data ?? []).length);
-                result = findAndUpdateNode(result, finalTarget.folderId, n => {
-                  const data = [...(n.data ?? [])];
-                  data.splice(dropIdx, 0, ...batchBookmarks);
-                  return withBookmarkData(n, data);
-                });
-                return result;
-              });
-              clearSelection();
-              animateBookmarkItemReflow(beforeRects);
             })();
           } else if (!isNoOpBookmarkMove(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex)) {
-            moveBookmarkBetweenFolders(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex);
+            moveBookmarkBetweenFolders(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex, ghostRect);
           }
         }
 

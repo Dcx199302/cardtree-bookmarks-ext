@@ -206,23 +206,54 @@ export function captureBookmarkItemRects(): Map<string, DOMRect> {
 export function animateBookmarkItemReflow(beforeRects: Map<string, DOMRect>): void {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   requestAnimationFrame(() => {
-    const items = document.querySelectorAll<HTMLElement>('[data-bookmark-item-id]');
-    for (const el of items) {
-      const id = el.dataset.bookmarkItemId;
-      if (!id) continue;
-      const before = beforeRects.get(id);
-      if (!before) continue;
-      const after = el.getBoundingClientRect();
-      const dx = before.left - after.left;
-      const dy = before.top - after.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      el.animate(
-        [
-          { transform: `translate(${dx}px, ${dy}px)` },
-          { transform: 'translate(0, 0)' },
-        ],
-        { duration: 220, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-      );
-    }
+    applyBookmarkFlip(beforeRects, 220);
   });
+}
+
+// Core FLIP: compare beforeRects to current positions and animate the inverted
+// transform back to zero. Intended to be called synchronously after DOM commit
+// (e.g. inside useLayoutEffect) so the inverted first frame lands pre-paint.
+export function applyBookmarkFlip(beforeRects: Map<string, DOMRect>, duration: number): void {
+  const items = document.querySelectorAll<HTMLElement>('[data-bookmark-item-id]');
+  for (const el of items) {
+    const id = el.dataset.bookmarkItemId;
+    if (!id) continue;
+    const before = beforeRects.get(id);
+    if (!before) continue;
+    const after = el.getBoundingClientRect();
+    const dx = before.left - after.left;
+    const dy = before.top - after.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+    el.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px)` },
+        { transform: 'translate(0, 0)' },
+      ],
+      { duration, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+    );
+  }
+}
+
+// Animate a freshly-landed bookmark from its ghost (pointer release) position
+// into its final grid slot. Scale ratio auto-adapts to large/small icon mode.
+export function animateFlyIn(
+  itemId: string,
+  origin: { left: number; top: number; width: number; height: number },
+  duration: number
+): void {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const el = document.querySelector<HTMLElement>(`[data-bookmark-item-id="${itemId}"]`);
+  if (!el) return;
+  const target = el.getBoundingClientRect();
+  const dx = origin.left - target.left;
+  const dy = origin.top - target.top;
+  const sx = target.width > 0 ? origin.width / target.width : 1;
+  const sy = target.height > 0 ? origin.height / target.height : 1;
+  el.animate(
+    [
+      { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+      { transform: 'translate(0, 0) scale(1, 1)' },
+    ],
+    { duration, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+  );
 }

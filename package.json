@@ -8,10 +8,12 @@
     "build": "tsc && vite build"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "dependencies": {
-    "@xuchengdong/cardtree-react": "^0.1.2",
+    "@xuchengdong/cardtree-react": "^0.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "rxjs": "^7.8.2"
