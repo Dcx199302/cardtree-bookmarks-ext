@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { StrictMode, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
 import { Subject, fromEvent, merge, animationFrameScheduler, Subscription } from 'rxjs';
@@ -18,9 +18,11 @@ import type { NavItem } from './NavRail';
 import { loadFolderDisplaySettings, setFolderDisplaySize, cleanupOrphanedSettings, loadCollapsedIds, saveCollapsedIds, loadNavRailOrder, saveNavRailOrder, type FolderDisplaySizeSettings, type NavRailOrder } from './folderDisplaySettings';
 import { MenuContext, type BookmarkPointerDragStart, type ActiveBookmarkDrag, type RubberBandState } from './menuContextTypes';
 import { findBookmarkFolderId, findNodeInTree, addBookmarkToNodes, updateBookmarkInNodes, removeBookmarkFromNodes, addFolderToNodes, renameFolderInNodes, removeFolderFromNodes, filterTree, toggleSelection, rangeSelect, withBookmarkData, findAndUpdateNode } from './bookmarkTreeHelpers';
-import { clampIndex, findDropTarget, resolveChromeInsertIndex, captureBookmarkItemRects, animateBookmarkItemReflow, TOOLTIP_SHOW_DELAY_MS, measureTextWidth } from './bookmarkDragDom';
+import { clampIndex, findDropTarget, resolveChromeInsertIndex, captureBookmarkItemRects, animateBookmarkItemReflow, applyBookmarkFlip, animateFlyIn, TOOLTIP_SHOW_DELAY_MS, measureTextWidth } from './bookmarkDragDom';
 import { useTheme } from './useTheme';
 import { ConfirmDialog } from './ConfirmDialog';
+import { loadSearchEngines, saveSearchEngines, type SearchEngine, MAX_VISIBLE } from './searchEnginesStore';
+import { SearchEngineSettingsDialog } from './SearchEngineSettingsDialog';
 import { FloatingBookmarkGhost, RubberBandOverlay } from './bookmarkDragUI';
 import { BookmarkFolderCard, RootBookmarksCard } from './BookmarkDropZone';
 import '@xuchengdong/cardtree-react/styles/cascade.css';
@@ -125,15 +127,23 @@ function NewTab() {
   const dragPreviewRef = useRef<{ folderId: string; dropIndex: number } | null>(null);
   const pointerPositionRef = useRef<{ x: number; y: number } | null>(null);
   const suppressBookmarkClickUntilRef = useRef(0);
+  const pendingDragFlipRef = useRef<Map<string, DOMRect> | null>(null);
   const bookmarkFolderMapRef = useRef<Map<string, string>>(new Map());
   const [nodes, setNodes] = useState<CardTreeNode<BookmarkItem[]>[]>([]);
   const [loading, setLoading] = useState(true);
+  const [suppressAnim, setSuppressAnim] = useState(true);
   const [navRailOrder, setNavRailOrder] = useState<NavRailOrder>({});
   const [isBookmarkDragging, setIsBookmarkDragging] = useState(false);
   const [activeBookmarkDrag, setActiveBookmarkDrag] = useState<ActiveBookmarkDrag | null>(null);
   const [dragPreview, setDragPreviewState] = useState<{ folderId: string; dropIndex: number } | null>(null);
-  const [dropGhost, setDropGhost] = useState<ActiveBookmarkDrag | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+ const [dropGhost, setDropGhost] = useState<ActiveBookmarkDrag | null>(null);
+  // 放置后 FLIP 动画的触发器：与 setNodes 同批提交，确保 useLayoutEffect
+  // 在 DOM commit 后同步执行，元素已就位，animateFlyIn 不会因查不到节点而静默失败。
+  const [pendingDropAnim, setPendingDropAnim] = useState<{
+    flyIn: Array<{ id: string; origin: { left: number; top: number; width: number; height: number } }>;
+    flipRects: Map<string, DOMRect>;
+  } | null>(null);
+ const [searchQuery, setSearchQuery] = useState('');
   const [menuState, setMenuState] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [confirmState, setConfirmState] = useState<{ message: string; action: () => Promise<void> } | null>(null);
@@ -148,6 +158,8 @@ function NewTab() {
   const [parentTitleMap, setParentTitleMap] = useState<Map<string, string>>(new Map());
   const [trashToast, setTrashToast] = useState<{ text: string; isWarning: boolean } | null>(null);
   const trashToastTimerRef = useRef<number | null>(null);
+  const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([]);
+  const [showEngineSettings, setShowEngineSettings] = useState(false);
   const [recentVisits, setRecentVisits] = useState<{ title: string; url: string; lastVisitTime: number }[]>([]);
   const [focusedBookmarkId, setFocusedBookmarkId] = useState<string | null>(null);
   const [prefocusedBookmarkId, setPrefocusedBookmarkIdRaw] = useState<string | null>(null);
@@ -268,8 +280,17 @@ function NewTab() {
       }).catch(() => {});
       loadTrash().then(setTrashItems).catch(() => {});
       loadNavRailOrder().then(setNavRailOrder).catch(() => {});
+      loadSearchEngines().then(setSearchEngines).catch(() => {});
     }).catch(() => setLoading(false));
   }, []);
+
+  // 首次加载完成后恢复动画（避免入场/折叠动画在初始渲染时执行）
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => setSuppressAnim(false), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   const loadRecentVisits = useCallback(() => {
     if (!chrome.sessions) return;
@@ -609,6 +630,7 @@ function NewTab() {
     const previousPointer = pointerPositionRef.current;
     const pointerDelta = previousPointer ? { dx: clientX - previousPointer.x, dy: clientY - previousPointer.y } : null;
     pointerPositionRef.current = { x: clientX, y: clientY };
+    const beforeRects = captureBookmarkItemRects();
     setDragPreviewState(prev => {
       const next = findDropTarget(clientX, clientY, prev, pointerDelta);
       if (!next) {
@@ -620,17 +642,40 @@ function NewTab() {
         return prev;
       }
       dragPreviewRef.current = next;
-      return next;
+     pendingDragFlipRef.current = beforeRects;
+     return next;
     });
   }, []);
 
-  const clearDropGhostLater = useCallback((ghost: ActiveBookmarkDrag) => {
-    setDropGhost(ghost);
-    if (dropGhostTimerRef.current != null) {
-      window.clearTimeout(dropGhostTimerRef.current);
-    }
-    dropGhostTimerRef.current = window.setTimeout(() => setDropGhost(null), 180);
-  }, []);
+  // FLIP animation while dragging: when dragPreview changes, surrounding
+  // bookmark items reflow (placeholder slot moves). Capture-before pattern is
+  // set in updateDragPreview; here we synchronously animate the inverted
+  // transform pre-paint so items glide instead of snapping.
+  useLayoutEffect(() => {
+    const beforeRects = pendingDragFlipRef.current;
+    if (!beforeRects) return;
+    pendingDragFlipRef.current = null;
+    if (!isBookmarkDragging) return;
+   applyBookmarkFlip(beforeRects, 150);
+ }, [dragPreview, isBookmarkDragging]);
+
+  // 放置后飞入 + 重排动画：在 useLayoutEffect 中同步执行，保证 DOM 已提交。
+ useLayoutEffect(() => {
+   if (!pendingDropAnim) return;
+   applyBookmarkFlip(pendingDropAnim.flipRects, 220);
+   for (const { id, origin } of pendingDropAnim.flyIn) {
+     animateFlyIn(id, origin, 280);
+   }
+   setPendingDropAnim(null);
+ }, [pendingDropAnim]);
+
+ const clearDropGhostLater = useCallback((ghost: ActiveBookmarkDrag) => {
+   setDropGhost(ghost);
+   if (dropGhostTimerRef.current != null) {
+     window.clearTimeout(dropGhostTimerRef.current);
+   }
+    dropGhostTimerRef.current = window.setTimeout(() => setDropGhost(null), 150);
+ }, []);
 
   const isNoOpBookmarkMove = useCallback((bookmarkId: string, sourceFolderId: string, targetFolderId: string, dropIndex: number): boolean => {
     if (sourceFolderId !== targetFolderId) return false;
@@ -652,41 +697,48 @@ function NewTab() {
     bookmarkId: string,
     sourceFolderId: string,
     targetFolderId: string,
-    dropIndex: number
+    dropIndex: number,
+    ghostRect?: { left: number; top: number; width: number; height: number } | null
   ) => {
     if (!bookmarkId || !sourceFolderId || !targetFolderId) return;
+    const snapshot = latestNodesRef.current;
+    const sourceNode = findNodeInTree(snapshot, sourceFolderId);
+    const targetNode = findNodeInTree(snapshot, targetFolderId);
+    if (!sourceNode || !targetNode) return;
+    const bm = (sourceNode.data ?? []).find(b => b.id === bookmarkId);
+    if (!bm) return;
+    if (isNoOpBookmarkMove(bookmarkId, sourceFolderId, targetFolderId, dropIndex)) return;
+
+    const beforeRects = captureBookmarkItemRects();
+
+    // 乐观更新先于 chrome API：确保 setNodes 与 endSub 中清除拖拽状态
+    // 在同一渲染批次提交，避免源位置短暂闪现被拖元素。
+    setNodes(prev => {
+      let result = findAndUpdateNode(prev, sourceFolderId, n => withBookmarkData(n, (n.data ?? []).filter(b => b.id !== bookmarkId)));
+      const targetData = findNodeInTree(result, targetFolderId)?.data ?? [];
+      const spliceIdx = Math.min(dropIndex, targetData.length);
+      result = findAndUpdateNode(result, targetFolderId, n => {
+        const data = [...(n.data ?? [])];
+        data.splice(spliceIdx, 0, bm);
+        return withBookmarkData(n, data);
+      });
+      return result;
+    });
+
+  // 与 setNodes 同批提交，确保飞入动画在 DOM commit 后的 useLayoutEffect 中播放。
+  setPendingDropAnim({
+     flyIn: ghostRect ? [{ id: bookmarkId, origin: ghostRect }] : [],
+     flipRects: beforeRects,
+   });
+
+    pendingSelfMoveIdsRef.current.set(bookmarkId, Date.now() + 1500);
     try {
-      const snapshot = latestNodesRef.current;
-      const sourceNode = findNodeInTree(snapshot, sourceFolderId);
-      const targetNode = findNodeInTree(snapshot, targetFolderId);
-      if (!sourceNode || !targetNode) return;
-      const bm = (sourceNode?.data ?? []).find(b => b.id === bookmarkId);
-      if (!bm) return;
-      if (isNoOpBookmarkMove(bookmarkId, sourceFolderId, targetFolderId, dropIndex)) return;
-
-      const beforeRects = captureBookmarkItemRects();
-
-      pendingSelfMoveIdsRef.current.set(bookmarkId, Date.now() + 1500);
-
       const children = await chrome.bookmarks.getChildren(targetFolderId);
       const bookmarkChildren = children.filter(c => c.url);
       const insertIndex = resolveChromeInsertIndex(children, bookmarkChildren, dropIndex);
       const destination: chrome.bookmarks.BookmarkDestinationArg = { parentId: targetFolderId };
       if (insertIndex !== undefined) destination.index = insertIndex;
       await chrome.bookmarks.move(bookmarkId, destination);
-
-      setNodes(prev => {
-        let result = findAndUpdateNode(prev, sourceFolderId, n => withBookmarkData(n, (n.data ?? []).filter(b => b.id !== bookmarkId)));
-        const targetData = findNodeInTree(result, targetFolderId)?.data ?? [];
-        const spliceIdx = Math.min(dropIndex, targetData.length);
-        result = findAndUpdateNode(result, targetFolderId, n => {
-          const data = [...(n.data ?? [])];
-          data.splice(spliceIdx, 0, bm);
-          return withBookmarkData(n, data);
-        });
-        return result;
-      });
-      animateBookmarkItemReflow(beforeRects);
     } catch (e) {
       console.error('移动书签失败:', e);
       reload();
@@ -803,9 +855,13 @@ function NewTab() {
           dragPreviewRef.current = finalTarget;
           setDragPreviewState(finalTarget);
         }
-        const drag = currentDrag ?? { ...start, currentX: dropPoint.x, currentY: dropPoint.y };
+       const drag = currentDrag ?? { ...start, currentX: dropPoint.x, currentY: dropPoint.y };
 
-        if (started) {
+       // 捕获 ghost 位置，用于落下后的 fly-in 动画
+       const ghostEl = document.querySelector<HTMLElement>('.bookmark-drag-ghost--floating:not(.is-dropping)');
+      const ghostRect = ghostEl ? ghostEl.getBoundingClientRect() : null;
+
+       if (started) {
           clearDropGhostLater(drag);
           markBookmarkDragCompleted();
         }
@@ -818,6 +874,25 @@ function NewTab() {
             const batchBookmarks = batchIds
               .map(id => (sourceNode?.data ?? []).find(b => b.id === id))
               .filter((b): b is BookmarkItem => !!b);
+            // 乐观更新先于 chrome API
+            setNodes(prev => {
+              let result = prev;
+              for (const bm of batchBookmarks) {
+                result = removeBookmarkFromNodes(result, start.sourceFolderId, bm.id);
+              }
+              const dropIdx = clampIndex(finalTarget.dropIndex, (findNodeInTree(result, finalTarget.folderId)?.data ?? []).length);
+              result = findAndUpdateNode(result, finalTarget.folderId, n => {
+                const data = [...(n.data ?? [])];
+                data.splice(dropIdx, 0, ...batchBookmarks);
+                return withBookmarkData(n, data);
+              });
+             return result;
+            });
+            setPendingDropAnim({
+              flyIn: ghostRect ? batchBookmarks.map(bm => ({ id: bm.id, origin: ghostRect })) : [],
+              flipRects: beforeRects,
+            });
+            clearSelection();
             (async () => {
               for (const bm of batchBookmarks) {
                 pendingSelfMoveIdsRef.current.set(bm.id, Date.now() + 1500);
@@ -827,24 +902,15 @@ function NewTab() {
                   console.error('批量拖动移动失败:', err);
                 }
               }
-              setNodes(prev => {
-                let result = prev;
-                for (const bm of batchBookmarks) {
-                  result = removeBookmarkFromNodes(result, start.sourceFolderId, bm.id);
-                }
-                const dropIdx = clampIndex(finalTarget.dropIndex, (findNodeInTree(result, finalTarget.folderId)?.data ?? []).length);
-                result = findAndUpdateNode(result, finalTarget.folderId, n => {
-                  const data = [...(n.data ?? [])];
-                  data.splice(dropIdx, 0, ...batchBookmarks);
-                  return withBookmarkData(n, data);
-                });
-                return result;
-              });
-              clearSelection();
-              animateBookmarkItemReflow(beforeRects);
             })();
-          } else if (!isNoOpBookmarkMove(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex)) {
-            moveBookmarkBetweenFolders(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex);
+         } else if (!isNoOpBookmarkMove(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex)) {
+           moveBookmarkBetweenFolders(start.bookmark.id, start.sourceFolderId, finalTarget.folderId, finalTarget.dropIndex, ghostRect);
+         } else if (ghostRect) {
+         // 无效放置或原地 no-op：从鼠标位置飞回原始位置（回弹动画）。
+          setPendingDropAnim({
+             flyIn: [{ id: start.bookmark.id, origin: ghostRect }],
+             flipRects: new Map(),
+           });
           }
         }
 
@@ -890,7 +956,28 @@ function NewTab() {
       openMenu(e, [
         ...(!isRoot ? [
           { label: '新建子文件夹', onClick: () => setDialogState({ mode: 'add-folder', targetId: '', parentId: sourceId }) },
-          { label: '新建书签', onClick: () => setDialogState({ mode: 'add-bookmark', targetId: '', parentId: sourceId }) },
+         { label: '新建书签', onClick: () => setDialogState({ mode: 'add-bookmark', targetId: '', parentId: sourceId }) },
+        { separator: true, label: '', onClick: () => {} },
+      ] : []),
+        ...(!isRoot ? [
+          { label: '展开（含子级）', onClick: () => {
+            const ref = treeRef.current;
+            if (!ref) return;
+            ref.expandNode(sourceId);
+            (function walk(n: CardTreeNode<BookmarkItem[]> | undefined) {
+              if (!n) return;
+              for (const c of n.children) { ref.expandNode(c.id); walk(c); }
+            })(findNodeInTree(latestNodesRef.current, sourceId) ?? undefined);
+          } },
+          { label: '折叠（含子级）', onClick: () => {
+            const ref = treeRef.current;
+            if (!ref) return;
+            ref.collapseNode(sourceId);
+            (function walk(n: CardTreeNode<BookmarkItem[]> | undefined) {
+              if (!n) return;
+              for (const c of n.children) { if (c.children.length > 0) ref.collapseNode(c.id); walk(c); }
+            })(findNodeInTree(latestNodesRef.current, sourceId) ?? undefined);
+          } },
           { separator: true, label: '', onClick: () => {} },
         ] : []),
         { label: currentLarge ? '切换为小图标' : '切换为大图标', onClick: () => toggleFolderDisplaySize(sourceId, isRoot || isTopLevelCard) },
@@ -925,6 +1012,16 @@ function NewTab() {
     e.preventDefault();
     openMenu(e, [
       { label: '新建文件夹', onClick: () => setDialogState({ mode: 'add-folder', targetId: '', parentId: '1' }) },
+      { label: '', separator: true },
+      { label: '全部展开', onClick: () => {
+        treeRef.current?.expandAll();
+        saveCollapsedIds([]).catch(() => {});
+      } },
+      { label: '全部折叠', onClick: () => {
+        treeRef.current?.collapseAll();
+        const ids = subFolderNodes.map(n => n.id);
+        saveCollapsedIds(ids).catch(() => {});
+      } },
     ]);
   };
 
@@ -1217,8 +1314,18 @@ function NewTab() {
     setLastClickedId(targetId);
   }, [lastClickedId, bookmarkDataMap]);
 
-  const isSearching = !!searchQuery;
-  const hasNoResults = isSearching && sortedRootSections.length === 0 && sortedSubNodes.length === 0;
+ const isSearching = !!searchQuery;
+ const hasNoResults = isSearching && sortedRootSections.length === 0 && sortedSubNodes.length === 0;
+
+  const visibleEngines = useMemo(
+    () => searchEngines.filter(e => e.enabled).slice(0, MAX_VISIBLE),
+    [searchEngines],
+  );
+
+  const handleSearchEnginesChange = useCallback((engines: SearchEngine[]) => {
+    setSearchEngines(engines);
+    saveSearchEngines(engines).catch(() => {});
+  }, []);
 
   if (loading) {
     return (
@@ -1285,9 +1392,9 @@ function NewTab() {
             <path d="M102 88L106.9 98L118 99.6L110 107.4L111.9 118.3L102 113.1L92.1 118.3L94 107.4L86 99.6L97.1 98Z" fill="none" stroke="#34A853" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round"/>
           </svg>
           <h1 className="newtab-title">CardTree</h1>
-          <div className="newtab-header-search">
-            <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} />
-          </div>
+         <div className="newtab-header-search">
+            <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} />
+         </div>
           <div className="header-actions" style={{ position: 'relative' }}>
             <a className="header-btn" href="https://github.com/Dcx199302/cardtree-bookmarks-ext" target="_blank" rel="noopener noreferrer"
               onMouseEnter={(e) => showTooltip(e, 'GitHub 仓库')}
@@ -1337,10 +1444,11 @@ function NewTab() {
 
         <RootBookmarksCard sections={sortedRootSections} recentVisits={recentVisits} isSearching={!!searchQuery} />
 
-        {sortedSubNodes.length > 0 ? (
+       {sortedSubNodes.length > 0 ? (
           <CardTree
-            ref={treeRef}
-            nodes={sortedSubNodes}
+            className={suppressAnim ? 'suppress-init-anim' : undefined}
+           ref={treeRef}
+           nodes={sortedSubNodes}
             renderNode={(node) => <BookmarkFolderCard node={node} bookmarks={bookmarkDataMap.get(node.sourceId) ?? []} />}
             selectable={false}
             dragDrop={dragDropConfig}
@@ -1367,8 +1475,16 @@ function NewTab() {
         <BookmarkDialog state={dialogState} onSave={handleSaveDialog} onMove={moveBookmarkToFolder} onBatchMove={handleBatchMove} onCancel={() => setDialogState(null)} />
       )}
 
-      {confirmState && (
-        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={() => setConfirmState(null)} />
+     {confirmState && (
+       <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={() => setConfirmState(null)} />
+     )}
+
+      {showEngineSettings && (
+        <SearchEngineSettingsDialog
+          engines={searchEngines}
+          onChange={handleSearchEnginesChange}
+          onClose={() => setShowEngineSettings(false)}
+        />
       )}
 
       {tooltip && (

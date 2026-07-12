@@ -152,7 +152,8 @@ body {
 .newtab-header-search {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: min(480px, calc(100% - 200px));
 }
 
@@ -499,13 +500,14 @@ body {
 }
 
 @keyframes bookmark-ghost-drop {
-  from { opacity: 0.95; transform: scale(1); }
-  to { opacity: 0; transform: scale(0.92); }
+  from { opacity: 0.8; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.88); }
 }
 
 /* ── Search Bar ── */
 .search-bar {
   width: 100%;
+  position: relative;
 }
 
 .search-bar-inner {
@@ -601,6 +603,369 @@ body {
   user-select: none;
 }
 
+/* ── 左侧图标触发区 ── */
+.search-bar-engine-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.search-bar-engine-trigger .bookmark-favicon,
+.search-bar-engine-trigger .bookmark-favicon-svg {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+/* ── 引擎下拉选择卡片 ── */
+.engine-dropdown-overlay {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10000;
+  animation: engine-dropdown-in 0.15s ease;
+}
+
+.engine-dropdown {
+  min-width: 180px;
+  max-width: 280px;
+  padding: 6px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  box-shadow: var(--glass-shadow-elevated), var(--glass-inner-highlight);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.engine-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+
+.engine-option:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.engine-option--active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.engine-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.engine-option-icon svg,
+.engine-option-icon img,
+.engine-option-icon .bookmark-favicon,
+.engine-option-icon .bookmark-favicon-svg {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 3px;
+}
+
+.engine-option-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.engine-option--settings {
+  color: var(--text-muted);
+}
+
+.engine-option--settings:hover {
+  color: var(--accent);
+}
+
+.engine-dropdown-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+@keyframes engine-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ── Search Engine Settings Dialog ── */
+.engine-dialog-card {
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+}
+
+.engine-dialog-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.engine-dialog-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.engine-dialog-list {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+.engine-dialog-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.engine-dialog-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.engine-dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s, opacity 0.2s;
+}
+
+.engine-dialog-row:hover {
+  background: var(--bg-hover);
+}
+
+.engine-dialog-row--disabled {
+  opacity: 0.4;
+}
+
+.engine-dialog-row--dragover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.engine-dialog-row--dragging {
+  opacity: 0.3;
+}
+
+.engine-dialog-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.engine-dialog-row:hover .engine-dialog-grip {
+  opacity: 1;
+}
+
+.engine-dialog-grip:active {
+  cursor: grabbing;
+}
+
+.engine-dialog-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.engine-dialog-icon svg,
+.engine-dialog-icon img {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.engine-dialog-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.engine-dialog-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.engine-dialog-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: color 0.15s, background 0.15s, opacity 0.15s;
+}
+
+.engine-dialog-row:hover .engine-dialog-action {
+  opacity: 1;
+}
+
+.engine-dialog-action:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.engine-dialog-action--danger:hover {
+  color: var(--danger);
+}
+
+.engine-dialog-toggle {
+  width: 32px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: var(--border);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.engine-dialog-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.engine-dialog-toggle--on {
+  background: var(--accent);
+}
+
+.engine-dialog-toggle--on .engine-dialog-toggle-knob {
+  transform: translateX(14px);
+}
+
+.engine-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.engine-dialog-footer-right {
+  display: flex;
+  gap: 8px;
+}
+
+.engine-dialog-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px dashed var(--border-hover);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.engine-dialog-add-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.engine-dialog-reset-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.engine-dialog-reset-btn:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.engine-dialog-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.engine-dialog-error {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.engine-dialog-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
 /* ── Search Results ── */
 .search-results {
   display: grid;
@@ -856,11 +1221,14 @@ body {
 /* ── Card fill override: grid stretches to fill card height ── */
 .cascade-node-card {
   cursor: default;
+  /* padding 从 card 移到内部 grid/empty，保证拖拽碰撞区域覆盖全部内容 */
+  padding: 0;
 }
 
 .cascade-node-card > .bookmark-grid,
 .cascade-node-card > .bookmark-empty {
   flex: 1;
+  padding: 12px 14px;
 }
 
 /* ── Dark mode overrides for cascade.css ── */
@@ -965,6 +1333,14 @@ body {
   :root:not([data-theme="light"]) .cascade-node-heading-row:hover .cascade-heading-dash { border-color: var(--accent); }
 }
 
+/* ── 首次加载时禁用入场和折叠动画 ── */
+.suppress-init-anim .cascade-node.is-entering {
+  animation: none;
+}
+.suppress-init-anim .cascade-node-body-row {
+  transition: none !important;
+}
+
 /* ── Header badge & active states ── */
 .header-btn--badge {
   position: relative;
@@ -1062,7 +1438,6 @@ body {
 }
 .trash-panel__list {
   overflow-y: auto;
-  flex: 1;
   min-height: 0;
 }
 .trash-panel__empty {
@@ -1169,7 +1544,31 @@ body {
   color: var(--text-muted);
   margin-bottom: 8px;
   letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+
+.root-recent-section__history-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.root-recent-section__history-btn:hover {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
 .root-recent-section__grid {
   display: flex;
   flex-wrap: wrap;
@@ -1307,7 +1706,12 @@ body {
   max-width: 200px;
   max-height: 65vh;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   animation: nav-rail-card-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nav-rail-card::-webkit-scrollbar {
+  display: none;
 }
 @keyframes nav-rail-card-in {
   from { opacity: 0; transform: translateY(-50%) translateX(-6px); }

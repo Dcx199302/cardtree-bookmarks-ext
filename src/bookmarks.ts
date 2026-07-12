@@ -6,12 +6,24 @@ export interface BookmarkItem {
   url: string;
 }
 
+// Firefox 不支持 Chrome 私有的 /_favicon/ 端点
+const isFirefox =
+  typeof navigator !== 'undefined' && /Firefox\/\d+/.test(navigator.userAgent);
+
 export function getFaviconUrl(pageUrl: string, size: number = 16): string {
   try {
-    const u = new URL(chrome.runtime.getURL('/_favicon/'));
-    u.searchParams.set('pageUrl', pageUrl);
-    u.searchParams.set('size', String(size));
-    return u.toString();
+    const hostname = new URL(pageUrl).hostname;
+
+    // Chrome 使用内置 favicon 服务，隐私更安全（本地解析，无网络请求）
+    if (!isFirefox) {
+      const u = new URL(chrome.runtime.getURL('/_favicon/'));
+      u.searchParams.set('pageUrl', pageUrl);
+      u.searchParams.set('size', String(size));
+      return u.toString();
+    }
+
+    // Firefox 无内置 favicon API，使用 Google favicon 服务作为替代
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=${size}`;
   } catch {
     return '';
   }
