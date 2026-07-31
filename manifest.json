@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CardTree Bookmarks",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Card-tree bookmark manager for new tab. Organize, search, drag-and-drop bookmarks with ease.",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
