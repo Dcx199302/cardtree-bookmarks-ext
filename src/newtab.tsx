@@ -10,7 +10,7 @@ import type { BookmarkItem } from './bookmarks';
 import { deleteBookmark, deleteFolder, moveBookmark } from './bookmarkActions';
 import { loadTrash, addToTrash, removeFromTrash, clearTrash, resolveRestoreParent, validateTrashParents, groupTrashByDate, type TrashItem } from './trashStore';
 import { recordVisit } from './visitTracker';
-import { SearchBar, type SearchBarRef } from './SearchBar';
+import { SearchBar, type SearchBarRef, type SearchMode } from './SearchBar';
 import { ContextMenu, type MenuItem } from './ContextMenu';
 import { BookmarkDialog, type DialogState, buildFolderOptions } from './BookmarkDialog';
 import NavRail from './NavRail';
@@ -158,9 +158,12 @@ function NewTab() {
   const [parentTitleMap, setParentTitleMap] = useState<Map<string, string>>(new Map());
   const [trashToast, setTrashToast] = useState<{ text: string; isWarning: boolean } | null>(null);
   const trashToastTimerRef = useRef<number | null>(null);
-  const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([]);
-  const [showEngineSettings, setShowEngineSettings] = useState(false);
-  const [recentVisits, setRecentVisits] = useState<{ title: string; url: string; lastVisitTime: number }[]>([]);
+ const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([]);
+ const [showEngineSettings, setShowEngineSettings] = useState(false);
+  const [searchMode, setSearchMode] = useState<SearchMode>('bookmark');
+  const searchModeRef = useRef(searchMode);
+  searchModeRef.current = searchMode;
+ const [recentVisits, setRecentVisits] = useState<{ title: string; url: string; lastVisitTime: number }[]>([]);
   const [focusedBookmarkId, setFocusedBookmarkId] = useState<string | null>(null);
   const [prefocusedBookmarkId, setPrefocusedBookmarkIdRaw] = useState<string | null>(null);
   const setPrefocusedBookmarkId = useCallback((id: string | null) => {
@@ -386,12 +389,22 @@ function NewTab() {
         if (isInput()) { (document.activeElement as HTMLElement)?.blur(); return; }
         if (focusedBookmarkId) { setFocusedBookmarkId(null); setPrefocusedBookmarkIdRaw(null); return; }
         if (prefocusedBookmarkId) { setPrefocusedBookmarkIdRaw(null); return; }
-        if (selectedIds.size > 0) { e.preventDefault(); clearSelection(); }
-      }
+       if (selectedIds.size > 0) { e.preventDefault(); clearSelection(); }
+     }
+
+     // 全局 Tab（不含 Shift+Tab）：非输入框聚焦时切换搜索模式并聚焦输入框
+     // Shift+Tab 保留原生焦点遍历，避免键盘导航被阻断
+     if (e.key === 'Tab' && !e.shiftKey && !isInput()) {
+       e.preventDefault();
+       searchRef.current?.toggleMode();
+       return;
+     }
 
       // ArrowDown/Up from search input → resume from last focused or start from first
-      if (isInput() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-        e.preventDefault();
+     if (isInput() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        // 引擎模式下方向键交给输入框自身处理（光标移动/历史导航）
+        if (searchModeRef.current === 'engine') return;
+       e.preventDefault();
         const allEls = document.querySelectorAll<HTMLElement>('[data-bookmark-item-id]');
         if (allEls.length > 0) {
           const resumeId = focusedBookmarkId ?? allEls[0]!.dataset.bookmarkItemId!;
@@ -1392,9 +1405,9 @@ function NewTab() {
             <path d="M102 88L106.9 98L118 99.6L110 107.4L111.9 118.3L102 113.1L92.1 118.3L94 107.4L86 99.6L97.1 98Z" fill="none" stroke="#34A853" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round"/>
           </svg>
           <h1 className="newtab-title">CardTree</h1>
-         <div className="newtab-header-search">
-            <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} />
-         </div>
+        <div className="newtab-header-search">
+           <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} onModeChange={setSearchMode} />
+        </div>
           <div className="header-actions" style={{ position: 'relative' }}>
             <a className="header-btn" href="https://github.com/Dcx199302/cardtree-bookmarks-ext" target="_blank" rel="noopener noreferrer"
               onMouseEnter={(e) => showTooltip(e, 'GitHub 仓库')}

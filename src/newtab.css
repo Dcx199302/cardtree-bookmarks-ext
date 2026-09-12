@@ -716,6 +716,94 @@ body {
 }
 
 
+/* ── 搜索快捷键提示组 ── */
+.search-bar-hints {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── 搜索历史下拉（仅引擎模式） ── */
+.search-history-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 6px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  box-shadow: var(--glass-shadow-elevated), var(--glass-inner-highlight);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: engine-dropdown-in 0.15s ease;
+}
+
+.search-history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+
+.search-history-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.search-history-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.search-history-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-history-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.1s, background 0.1s;
+}
+
+.search-history-clear:hover {
+  color: #e8533f;
+  background: color-mix(in srgb, #e8533f 10%, transparent);
+}
+
 /* ── Search Engine Settings Dialog ── */
 .engine-dialog-card {
   width: min(420px, calc(100vw - 48px));
