@@ -477,12 +477,16 @@ body {
 }
 
 .bookmark-grid--large .bookmark-title {
+  width: 100%;
+  max-width: 100%;
   text-align: center;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   line-height: 1.3;
 }
 
