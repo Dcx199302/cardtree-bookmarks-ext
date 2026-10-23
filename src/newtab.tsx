@@ -16,8 +16,9 @@ import { BookmarkDialog, type DialogState, buildFolderOptions } from './Bookmark
 import NavRail from './NavRail';
 import type { NavItem } from './NavRail';
 import { loadFolderDisplaySettings, setFolderDisplaySize, cleanupOrphanedSettings, loadCollapsedIds, saveCollapsedIds, loadNavRailOrder, saveNavRailOrder, type FolderDisplaySizeSettings, type NavRailOrder } from './folderDisplaySettings';
+import { loadLastDrillFolderId, saveLastDrillFolderId } from './folderDrillStore';
 import { MenuContext, type BookmarkPointerDragStart, type ActiveBookmarkDrag, type RubberBandState } from './menuContextTypes';
-import { findBookmarkFolderId, findNodeInTree, addBookmarkToNodes, updateBookmarkInNodes, removeBookmarkFromNodes, addFolderToNodes, renameFolderInNodes, removeFolderFromNodes, filterTree, toggleSelection, rangeSelect, withBookmarkData, findAndUpdateNode } from './bookmarkTreeHelpers';
+import { findBookmarkFolderId, findNodeInTree, findDrillFolderPath, findParentFolderId, addBookmarkToNodes, updateBookmarkInNodes, removeBookmarkFromNodes, addFolderToNodes, renameFolderInNodes, removeFolderFromNodes, filterTree, toggleSelection, rangeSelect, withBookmarkData, findAndUpdateNode } from './bookmarkTreeHelpers';
 import { clampIndex, findDropTarget, resolveChromeInsertIndex, captureBookmarkItemRects, animateBookmarkItemReflow, applyBookmarkFlip, animateFlyIn, TOOLTIP_SHOW_DELAY_MS, measureTextWidth } from './bookmarkDragDom';
 import { useTheme } from './useTheme';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -25,6 +26,7 @@ import { loadSearchEngines, saveSearchEngines, type SearchEngine, MAX_VISIBLE } 
 import { SearchEngineSettingsDialog } from './SearchEngineSettingsDialog';
 import { FloatingBookmarkGhost, RubberBandOverlay } from './bookmarkDragUI';
 import { BookmarkFolderCard, RootBookmarksCard } from './BookmarkDropZone';
+import { FolderDrillBreadcrumb } from './FolderDrillBreadcrumb';
 import '@xuchengdong/cardtree-react/styles/cascade.css';
 import './newtab.css';
 
@@ -171,12 +173,32 @@ function NewTab() {
     if (id != null) setFocusedBookmarkId(null);
   }, []);
   const preSearchCollapsedRef = useRef<string[] | null>(null);
+  const [drillFolderId, setDrillFolderId] = useState<string | null>(null);
+  const preSearchDrillFolderIdRef = useRef<string | null | undefined>(undefined);
+  const lastCardPointerDownRef = useRef<{ folderId: string; x: number; y: number; time: number } | null>(null);
+  const pendingCollapsedIdsRef = useRef<string[]>([]);
   const { cycle: cycleTheme, label: themeLabel } = useTheme();
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setLastClickedId(null);
   }, []);
+
+  const drillToFolder = useCallback((folderId: string | null) => {
+    setDrillFolderId(folderId);
+    setFocusedBookmarkId(null);
+    setPrefocusedBookmarkId(null);
+    clearSelection();
+    window.scrollTo({ top: 0 });
+  }, [clearSelection, setPrefocusedBookmarkId]);
+
+  const selectFromBreadcrumb = useCallback((folderId: string | null) => {
+    if (searchQuery) {
+      preSearchDrillFolderIdRef.current = null;
+      searchRef.current?.clear();
+    }
+    drillToFolder(folderId);
+  }, [drillToFolder, searchQuery]);
 
   const query$ = useRef(new Subject<string>());
   useEffect(() => {
@@ -186,6 +208,38 @@ function NewTab() {
     ).subscribe(q => setSearchQuery(q));
     return () => sub.unsubscribe();
   }, []);
+
+  // 搜索面向完整书签树；钻取位置只是暂存，退出搜索后恢复，避免丢失用户上下文。
+  useEffect(() => {
+    if (searchQuery) {
+      if (preSearchDrillFolderIdRef.current === undefined) {
+        preSearchDrillFolderIdRef.current = drillFolderId;
+      }
+      if (drillFolderId) drillToFolder(null);
+      return;
+    }
+
+    const restoredFolderId = preSearchDrillFolderIdRef.current;
+    if (restoredFolderId === undefined) return;
+    preSearchDrillFolderIdRef.current = undefined;
+    if (restoredFolderId !== null && findDrillFolderPath(nodes, restoredFolderId).length > 0) {
+      drillToFolder(restoredFolderId);
+    } else {
+      drillToFolder(null);
+    }
+  }, [drillFolderId, drillToFolder, nodes, searchQuery]);
+
+  // Chrome 事件触发整树重载后，重新验证当前钻取文件夹，避免停留在已删除路径。
+  useEffect(() => {
+    if (!drillFolderId) return;
+    if (findDrillFolderPath(nodes, drillFolderId).length === 0) drillToFolder(null);
+  }, [nodes, drillFolderId, drillToFolder]);
+
+  // 初始加载完成前不写入，避免默认首页覆盖 storage 中的上次位置。
+  useEffect(() => {
+    if (loading || searchQuery) return;
+    saveLastDrillFolderId(drillFolderId).catch(() => {});
+  }, [drillFolderId, loading, searchQuery]);
 
   // Sync expand/collapse with search state
   useEffect(() => {
@@ -264,8 +318,27 @@ function NewTab() {
   }, [nodes]);
 
   useEffect(() => {
-    loadBookmarkTree().then(data => {
+    loadBookmarkTree().then(async data => {
+      // 先用完整树校验 storage 中的 ID，再进入渲染态，避免初始化竞态把上次位置清空。
+      let restoredDrillFolderId: string | null = null;
+      try {
+        const savedDrillFolderId = await loadLastDrillFolderId();
+        if (savedDrillFolderId && findDrillFolderPath(data, savedDrillFolderId).length > 0) {
+          restoredDrillFolderId = savedDrillFolderId;
+        }
+      } catch {
+        // 恢复失败只影响记忆功能，不阻断新标签页加载。
+      }
+
+      // 启动可能直接进入局部视图；未出现在当前视图的折叠 ID 先挂起，等节点出现后再恢复。
+      try {
+        pendingCollapsedIdsRef.current = await loadCollapsedIds();
+      } catch {
+        pendingCollapsedIdsRef.current = [];
+      }
+
       setNodes(data);
+      setDrillFolderId(restoredDrillFolderId);
       setLoading(false);
       loadFolderDisplaySettings().then(settings => {
         setDisplaySettings(settings);
@@ -274,12 +347,6 @@ function NewTab() {
           for (const n of ns) { allIds.add(n.id); collect(n.children); }
         })(data);
         cleanupOrphanedSettings(allIds).then(c => setDisplaySettings(c));
-      }).catch(() => {});
-      // Restore collapse state
-      loadCollapsedIds().then(ids => {
-        for (const id of ids) {
-          treeRef.current?.collapseNode(id);
-        }
       }).catch(() => {});
       loadTrash().then(setTrashItems).catch(() => {});
       loadNavRailOrder().then(setNavRailOrder).catch(() => {});
@@ -389,7 +456,8 @@ function NewTab() {
         if (isInput()) { (document.activeElement as HTMLElement)?.blur(); return; }
         if (focusedBookmarkId) { setFocusedBookmarkId(null); setPrefocusedBookmarkIdRaw(null); return; }
         if (prefocusedBookmarkId) { setPrefocusedBookmarkIdRaw(null); return; }
-       if (selectedIds.size > 0) { e.preventDefault(); clearSelection(); }
+       if (selectedIds.size > 0) { e.preventDefault(); clearSelection(); return; }
+       if (drillFolderId) { e.preventDefault(); drillToFolder(null); }
      }
 
      // 全局 Tab（不含 Shift+Tab）：非输入框聚焦时切换搜索模式并聚焦输入框
@@ -550,7 +618,7 @@ function NewTab() {
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [selectedIds, focusedBookmarkId, clearSelection, refreshTrash]);
+  }, [selectedIds, focusedBookmarkId, prefocusedBookmarkId, drillFolderId, clearSelection, drillToFolder, refreshTrash]);
 
   useEffect(() => {
     const id = focusedBookmarkId ?? prefocusedBookmarkId;
@@ -609,10 +677,13 @@ function NewTab() {
     setTooltip(null);
   }, [clearTooltipTimer]);
 
-  const getFolderDisplaySize = useCallback((folderId: string, defaultLarge: boolean): boolean => {
+  const getFolderDisplaySize = useCallback((folderId: string, _defaultLarge: boolean): boolean => {
     if (folderId in displaySettings) return displaySettings[folderId]!;
-    return defaultLarge;
-  }, [displaySettings]);
+    // 钻取视图会把任意层级的文件夹渲染为 depth 0；默认大图标必须按完整树判断。
+    const isRootSection = nodes.some(n => n.id === folderId);
+    const isTopLevelFolder = nodes.some(n => n.children.some(child => child.id === folderId));
+    return isRootSection || isTopLevelFolder;
+  }, [displaySettings, nodes]);
 
   const toggleFolderDisplaySize = useCallback(async (folderId: string, defaultLarge?: boolean) => {
     const current = getFolderDisplaySize(folderId, defaultLarge ?? true);
@@ -968,6 +1039,7 @@ function NewTab() {
       e.preventDefault();
       openMenu(e, [
         ...(!isRoot ? [
+          { label: currentDrillFolder?.id === sourceId ? '退出此文件夹' : '进入此文件夹', onClick: () => drillToFolder(currentDrillFolder?.id === sourceId ? null : sourceId) },
           { label: '新建子文件夹', onClick: () => setDialogState({ mode: 'add-folder', targetId: '', parentId: sourceId }) },
          { label: '新建书签', onClick: () => setDialogState({ mode: 'add-bookmark', targetId: '', parentId: sourceId }) },
         { separator: true, label: '', onClick: () => {} },
@@ -1148,23 +1220,40 @@ function NewTab() {
     showDragHandle: true,
     onDragStart: () => !searchQuery,
     onDrop: (dragId, target) => {
-      const chromeParentId = target.targetParentId ?? '1';
+      // CardTree 根列表合并了多个 Chrome 根分区的子文件夹；targetParentId 为空时
+      // 必须从参照节点反查真实父分区。反查失败时拒绝移动，避免误写入默认根分区。
+      const chromeParentId = target.targetParentId
+        ?? (target.referenceId ? findParentFolderId(latestNodesRef.current, target.referenceId) : null);
+      if (!chromeParentId) return false;
+
+      const persistMove = (index?: number) => moveBookmark(dragId, chromeParentId, index).catch(e => {
+        console.error('移动文件夹失败:', e);
+        reload();
+      });
       let index: number | undefined;
       if (target.referenceId && target.position !== 'last-child') {
         chrome.bookmarks.getChildren(chromeParentId).then(children => {
           const refIdx = children.findIndex(c => c.id === target.referenceId);
+          if (refIdx < 0) {
+            console.error('移动文件夹失败: 未找到参照节点');
+            reload();
+            return;
+          }
           if (target.position === 'before') index = refIdx;
           else if (target.position === 'after') index = refIdx + 1;
           else if (target.position === 'first-child') index = 0;
-          moveBookmark(dragId, chromeParentId, index);
+          void persistMove(index);
+        }).catch(e => {
+          console.error('获取子节点失败:', e);
+          reload();
         });
       } else {
         if (target.position === 'first-child') index = 0;
-        moveBookmark(dragId, chromeParentId, index);
+        void persistMove(index);
       }
       return true;
     },
-  }), [searchQuery]);
+  }), [reload, searchQuery]);
 
   const rootSections = useMemo(() =>
     nodes.map(n => ({ id: n.id, label: n.label, bookmarks: n.data ?? [] })),
@@ -1214,7 +1303,39 @@ function NewTab() {
 
   const sortedRootSections = filteredRootSections;
 
-  const sortedSubNodes = filteredSubNodes;
+  // Chrome 根分区（书签栏/其他书签）固定显示在顶部，不属于下钻路径。
+  const drillFolderPath = useMemo(
+    () => drillFolderId ? findDrillFolderPath(nodes, drillFolderId) : [],
+    [nodes, drillFolderId],
+  );
+  const currentDrillFolder = drillFolderPath.length > 0
+    ? drillFolderPath[drillFolderPath.length - 1]
+    : null;
+  const sortedSubNodes = currentDrillFolder ? [currentDrillFolder] : filteredSubNodes;
+  const firstDrillFolder = drillFolderPath[0];
+  const firstDrillFolderParent = firstDrillFolder
+    ? nodes.find(node => node.children.some(child => child.id === firstDrillFolder.id))
+    : undefined;
+  const drillBreadcrumbPath = useMemo(() => drillFolderPath.map((folder, index) => ({
+    id: folder.id,
+    label: folder.label,
+    siblings: (index === 0 ? firstDrillFolderParent?.children ?? [] : drillFolderPath[index - 1]!.children)
+      .map(n => ({ id: n.id, label: n.label })),
+  })), [drillFolderPath, firstDrillFolderParent]);
+
+  // 首次恢复可能直接进入局部树；这里按当前可见节点逐个恢复折叠，未出现的 ID 留待视图切回时生效。
+  useEffect(() => {
+    const pendingIds = pendingCollapsedIdsRef.current;
+    if (pendingIds.length === 0) return;
+    const remainingIds = pendingIds.filter(folderId => {
+      if (!findNodeInTree(sortedSubNodes, folderId)) return true;
+      treeRef.current?.collapseNode(folderId);
+      return false;
+    });
+    if (remainingIds.length !== pendingIds.length) {
+      pendingCollapsedIdsRef.current = remainingIds;
+    }
+  }, [sortedSubNodes]);
 
   // ── NavRail items ──
   const navItems = useMemo(() => [
@@ -1245,25 +1366,42 @@ function NewTab() {
     saveNavRailOrder(cleaned).catch(() => {});
   }, [navItems]);
 
+  const scrollFolderIntoView = useCallback((folderId: string) => {
+    const heading = document.querySelector<HTMLElement>(`.cascade-node[data-source-id="${folderId}"] .cascade-node-heading-row`);
+    if (heading) {
+      heading.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    // 节点可能仍在折叠或虚拟滚动窗口外，先交给 CardTree 展开，再定位标题。
+    treeRef.current?.scrollToNode(folderId, { behavior: 'smooth', block: 'center' });
+    requestAnimationFrame(() => {
+      const h = document.querySelector<HTMLElement>(`.cascade-node[data-source-id="${folderId}"] .cascade-node-heading-row`);
+      h?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, []);
+
   const handleNavRailClick = useCallback((item: NavItem) => {
     if (item.kind === 'root') {
+      // 根分区独立展示在顶部，只用于导航，不作为下钻层级。
+      drillToFolder(null);
       const label = document.querySelector<HTMLElement>(`section.root-bookmark-section[data-source-id="${item.id}"] .root-bookmark-section__label`);
-      if (label) label.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else {
-      // Try direct DOM query first (heading-level scroll)
-      const heading = document.querySelector<HTMLElement>(`.cascade-node[data-source-id="${item.id}"] .cascade-node-heading-row`);
-      if (heading) {
-        heading.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (label) {
+        label.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } else {
-        // Node not rendered yet (virtualized / collapsed) — expand via scrollToNode, then re-target heading
-        treeRef.current?.scrollToNode(item.id, { behavior: 'smooth', block: 'center' });
         requestAnimationFrame(() => {
-          const h = document.querySelector<HTMLElement>(`.cascade-node[data-source-id="${item.id}"] .cascade-node-heading-row`);
-          if (h) h.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          document.querySelector<HTMLElement>(`section.root-bookmark-section[data-source-id="${item.id}"] .root-bookmark-section__label`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
       }
+      return;
     }
-  }, []);
+
+    const isInsideDrillView = !currentDrillFolder
+      || item.id === currentDrillFolder.id
+      || !!findNodeInTree([currentDrillFolder], item.id);
+    if (!isInsideDrillView) drillToFolder(item.id);
+    scrollFolderIntoView(item.id);
+  }, [currentDrillFolder, drillToFolder, scrollFolderIntoView]);
 
   const handleNavRailReorder = useCallback(async (sourceIdx: number, targetIdx: number) => {
     if (sourceIdx === targetIdx) return;
@@ -1306,8 +1444,51 @@ function NewTab() {
     saveNavRailOrder({}).catch(() => {});
   }, [orderedNavItems, nodes]);
 
+  const handleTreePointerDown = useCallback((e: React.PointerEvent) => {
+    const invalidateDoublePress = () => { lastCardPointerDownRef.current = null; };
+    if (searchQuery || isBookmarkDragging || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
+      invalidateDoublePress();
+      return;
+    }
+
+    const target = e.target as HTMLElement;
+    if (target.closest('.bookmark-item, .cascade-node-title, a, button, input, textarea, [contenteditable="true"]')) {
+      invalidateDoublePress();
+      return;
+    }
+
+    // 只允许卡片内容容器触发，排除标题行、层级连接线和节点外空白。
+    const cardEl = target.closest<HTMLElement>('.cascade-node-card');
+    const folderEl = cardEl?.closest<HTMLElement>('.cascade-node[data-source-id]');
+    const folderId = folderEl?.dataset.sourceId;
+    if (!cardEl || !folderId) {
+      invalidateDoublePress();
+      return;
+    }
+
+    // 卡片空白区首次 pointerdown 会启动框选，overlay 在 pointerup 时 preventDefault，
+    // 可能抑制浏览器合成 dblclick；这里手动判定连续两次快速、就近的 pointerdown。
+    const last = lastCardPointerDownRef.current;
+    const isDoublePress = !!last
+      && last.folderId === folderId
+      && e.timeStamp - last.time <= 500
+      && Math.hypot(e.clientX - last.x, e.clientY - last.y) <= 6;
+    lastCardPointerDownRef.current = isDoublePress
+      ? null
+      : { folderId, x: e.clientX, y: e.clientY, time: e.timeStamp };
+    if (!isDoublePress) return;
+
+    // 双击当前视图卡片退出；双击子卡片继续下钻，形成稳定的进出交互。
+    if (currentDrillFolder?.id === folderId) {
+      drillToFolder(null);
+    } else {
+      drillToFolder(folderId);
+    }
+  }, [currentDrillFolder, drillToFolder, isBookmarkDragging, searchQuery]);
+
   const bookmarkDataMap = useMemo(() => {
     const map = new Map<string, BookmarkItem[]>();
+    for (const section of sortedRootSections) map.set(section.id, section.bookmarks);
     function collect(items: CardTreeNode<BookmarkItem[]>[]) {
       for (const n of items) {
         map.set(n.id, n.data ?? []);
@@ -1316,7 +1497,7 @@ function NewTab() {
     }
     collect(sortedSubNodes);
     return map;
-  }, [sortedSubNodes]);
+  }, [sortedRootSections, sortedSubNodes]);
 
   const rangeSelectBookmarks = useCallback((folderId: string, targetId: string) => {
     const bookmarks = bookmarkDataMap.get(folderId) ?? [];
@@ -1457,11 +1638,18 @@ function NewTab() {
 
         <RootBookmarksCard sections={sortedRootSections} recentVisits={recentVisits} isSearching={!!searchQuery} />
 
+        <FolderDrillBreadcrumb
+          path={drillBreadcrumbPath}
+          onSelect={selectFromBreadcrumb}
+        />
+
        {sortedSubNodes.length > 0 ? (
+        <div className="folder-drill-tree" onPointerDown={handleTreePointerDown}>
           <CardTree
             className={suppressAnim ? 'suppress-init-anim' : undefined}
-           ref={treeRef}
-           nodes={sortedSubNodes}
+            ref={treeRef}
+            nodes={sortedSubNodes}
+            appearance={false}
             renderNode={(node) => <BookmarkFolderCard node={node} bookmarks={bookmarkDataMap.get(node.sourceId) ?? []} />}
             selectable={false}
             dragDrop={dragDropConfig}
@@ -1473,6 +1661,7 @@ function NewTab() {
             virtualization
             style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
           />
+        </div>
         ) : hasNoResults ? (
           <div className="search-empty">未找到匹配的书签</div>
         ) : null}

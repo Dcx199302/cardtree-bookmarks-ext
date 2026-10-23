@@ -16,6 +16,7 @@ interface SearchBarProps {
 export interface SearchBarRef {
   focus: () => void;
   toggleMode: () => void;
+  clear: () => void;
 }
 
 // 书签搜索图标（放大镜）
@@ -123,10 +124,21 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
     else switchToBookmark();
   }, [mode, switchToEngine, switchToBookmark]);
 
+  const clear = useCallback(() => {
+    if (mode === 'bookmark') {
+      setBookmarkQuery('');
+      onQueryChange('');
+    } else {
+      setEngineQuery('');
+    }
+    inputRef.current?.focus();
+  }, [mode, onQueryChange]);
+
   useImperativeHandle(ref, () => ({
     focus: () => inputRef.current?.focus(),
     toggleMode,
-  }), [toggleMode]);
+    clear,
+  }), [clear, toggleMode]);
 
   // 方向键切换引擎时短暂展示下拉框，延迟自动收起
   const previewEngineDropdown = useCallback(() => {
@@ -182,15 +194,7 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
     }
   };
 
-  const handleClear = () => {
-    if (mode === 'bookmark') {
-      setBookmarkQuery('');
-      onQueryChange('');
-    } else {
-      setEngineQuery('');
-    }
-    inputRef.current?.focus();
-  };
+  const handleClear = clear;
 
   const handleSearch = useCallback(async () => {
     const q = engineQuery.trim();

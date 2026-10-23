@@ -415,6 +415,171 @@ body {
   letter-spacing: 0.01em;
 }
 
+/* ── Folder drill breadcrumb ── */
+.folder-drill-breadcrumb {
+  position: relative;
+  /* backdrop-filter 会创建层叠上下文；必须提升容器本身，子级菜单才能盖过后续 CardTree。 */
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.folder-drill-breadcrumb__level {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.folder-drill-breadcrumb__root,
+.folder-drill-breadcrumb__link,
+.folder-drill-breadcrumb__current {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  max-width: 180px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 5px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.folder-drill-breadcrumb__root,
+.folder-drill-breadcrumb__link {
+  color: var(--text-secondary);
+}
+
+.folder-drill-breadcrumb__root {
+  color: var(--text-muted);
+}
+
+.folder-drill-breadcrumb__button--has-menu::after {
+  content: '▾';
+  margin-left: 3px;
+  font-size: 9px;
+  opacity: 0.55;
+}
+
+.folder-drill-breadcrumb__root:hover,
+.folder-drill-breadcrumb__link:hover {
+  background: var(--glass-bg-hover);
+  color: var(--accent);
+}
+
+.folder-drill-breadcrumb__current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.folder-drill-breadcrumb__separator {
+  color: var(--text-muted);
+}
+
+.folder-drill-breadcrumb__menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  z-index: 120;
+  display: flex;
+  min-width: 187px;
+  max-width: 238px;
+  max-height: 300px;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  box-shadow:
+    0 14px 40px rgba(15, 23, 42, 0.14),
+    0 4px 12px rgba(15, 23, 42, 0.08),
+    var(--glass-inner-highlight);
+  animation: folder-drill-menu-in 0.14s ease-out;
+}
+
+.folder-drill-breadcrumb__menu::-webkit-scrollbar {
+  width: 5px;
+}
+
+.folder-drill-breadcrumb__menu::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border-hover);
+}
+
+.folder-drill-breadcrumb__menu-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
+}
+
+.folder-drill-breadcrumb__menu-item:hover,
+.folder-drill-breadcrumb__menu-item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.folder-drill-breadcrumb__menu-item--current,
+.folder-drill-breadcrumb__menu-item--current:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.folder-drill-breadcrumb__menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.folder-drill-breadcrumb__menu-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+}
+
+@keyframes folder-drill-menu-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* ── Global Tooltip ── */
 .global-tooltip {
   position: fixed;

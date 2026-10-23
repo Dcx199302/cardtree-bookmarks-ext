@@ -103,6 +103,32 @@ export function findNodeInTree(nodes: CardTreeNode<BookmarkItem[]>[], nodeId: st
   return undefined;
 }
 
+export function findNodePath(nodes: CardTreeNode<BookmarkItem[]>[], nodeId: string): CardTreeNode<BookmarkItem[]>[] {
+  for (const n of nodes) {
+    if (n.id === nodeId) return [n];
+    const childPath = findNodePath(n.children, nodeId);
+    if (childPath.length > 0) return [n, ...childPath];
+  }
+  return [];
+}
+
+/** Chrome 根分区固定显示在顶部；可钻取路径从根分区的子文件夹开始。 */
+export function findDrillFolderPath(
+  nodes: CardTreeNode<BookmarkItem[]>[],
+  folderId: string,
+): CardTreeNode<BookmarkItem[]>[] {
+  const path = findNodePath(nodes, folderId);
+  return path.length > 1 ? path.slice(1) : [];
+}
+
+export function findParentFolderId(
+  nodes: CardTreeNode<BookmarkItem[]>[],
+  folderId: string,
+): string | null {
+  const path = findNodePath(nodes, folderId);
+  return path.length > 1 ? path[path.length - 2]!.id : null;
+}
+
 export function addBookmarkToNodes(
   nodes: CardTreeNode<BookmarkItem[]>[],
   parentId: string,
