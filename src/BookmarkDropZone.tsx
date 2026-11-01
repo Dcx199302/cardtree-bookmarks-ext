@@ -193,7 +193,7 @@ export function RootBookmarksCard({ sections, recentVisits, isSearching }: { sec
       {showRecent && (
         <div className="root-recent-section">
           <div className="root-recent-section__label">
-            最近关闭
+            <span>最近关闭</span>
             <button
               className="root-recent-section__history-btn"
               title="打开历史记录"
@@ -258,7 +258,7 @@ function RootBookmarkSection({ section }: { section: RootSection }) {
 
   return (
     <section className="root-bookmark-section" data-source-id={section.id}>
-      <div className="root-bookmark-section__label">{section.label}</div>
+      <div className="root-bookmark-section__label"><span>{section.label}</span></div>
       <BookmarkDropZone
         folderId={section.id}
         bookmarks={section.bookmarks}

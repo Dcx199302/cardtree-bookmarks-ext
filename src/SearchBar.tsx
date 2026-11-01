@@ -21,7 +21,7 @@ export interface SearchBarRef {
 
 // 书签搜索图标（放大镜）
 const BOOKMARK_SEARCH_ICON = (
-  <svg className="search-bar-icon" width="18" height="18" viewBox="0 0 16 16" fill="none">
+  <svg className="search-bar-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
     <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5" />
     <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
@@ -294,7 +294,7 @@ export const SearchBar = forwardRef<SearchBarRef, SearchBarProps>(function Searc
         />
         {query ? (
           <button className="search-bar-clear" onMouseDown={e => e.preventDefault()} onClick={handleClear}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>

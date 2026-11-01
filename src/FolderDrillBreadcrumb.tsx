@@ -49,7 +49,7 @@ function BreadcrumbLevel({ id, label, siblings, isCurrent, onSelect, children }:
       const availableHeight = window.innerHeight - triggerRect.bottom - viewportMargin;
       setMenuStyle({
         left: `${left - levelRect.left}px`,
-        top: `${triggerRect.bottom + 7 - levelRect.top}px`,
+        top: `${triggerRect.bottom - levelRect.top}px`,
         maxWidth: `${maxMenuWidth}px`,
         maxHeight: `${Math.max(120, availableHeight)}px`,
         visibility: 'visible',

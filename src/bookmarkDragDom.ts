@@ -1,15 +1,8 @@
 // ── Constants ──
 
-export const FAVICON_COLORS = ['#818cf8', '#f472b6', '#fbbf24', '#34d399', '#60a5fa', '#f87171', '#a78bfa', '#2dd4bf'];
 export const TOOLTIP_SHOW_DELAY_MS = 500;
 
 // ── Color / Text Utilities ──
-
-export function hashColor(str: string): string {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
-  return FAVICON_COLORS[Math.abs(h) % FAVICON_COLORS.length]!;
-}
 
 const _mCanvas = document.createElement('canvas');
 const _mCtx = _mCanvas.getContext('2d')!;
