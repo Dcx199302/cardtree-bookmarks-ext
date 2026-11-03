@@ -22,6 +22,7 @@
 - **回收站** — 删除的书签可在 30 天内恢复到原位置
 - **左侧导航栏** — 快速跳转任意文件夹，支持拖拽调整顺序
 - **主题切换** — 浅色 / 深色 / 跟随系统，毛玻璃质感 UI
+- **背景设置** — 支持内置 Unsplash 壁纸与本机图片上传，提供图库管理、遮罩、模糊与自动保存
 - **访问追踪** — 记录书签使用频率和最近访问时间
 
 ## 安装
@@ -84,6 +85,13 @@ src/
 ├── SearchBar.tsx           # 搜索输入
 ├── FaviconImg.tsx          # 网站图标（含字母回退）
 ├── ConfirmDialog.tsx       # 确认对话框
+├── SettingsDialog.tsx      # 可扩展设置中心
+├── BackgroundSettingsSection.tsx # 背景设置分区
+├── backgroundCatalog.ts    # 内置背景目录
+├── backgroundSettingsStore.ts # 背景设置持久化
+├── backgroundImageProcessing.ts # 本地背景压缩与规格化
+├── customBackgroundStore.ts # 自定义背景 IndexedDB 存储
+├── useBackgroundSettings.ts # 背景设置状态 hook
 ├── trashStore.ts           # 回收站（chrome.storage.local）
 ├── visitTracker.ts         # 访问追踪（chrome.storage.local）
 ├── folderDisplaySettings.ts # 文件夹显示设置持久化
@@ -91,9 +99,15 @@ src/
 └── menuContextTypes.ts     # React Context 定义
 ```
 
+其他静态资源：
+
+- `public/backgrounds/` — Unsplash 背景素材与来源说明
+
 ## 隐私政策
 
-本扩展不收集、传输或在外部存储任何个人数据。所有数据均通过 `chrome.storage.local` 保存在本地设备上。
+本扩展不收集、传输或在外部存储任何个人数据。偏好设置通过 `chrome.storage.local` 保存；自定义背景图片会在本地压缩后保存在浏览器 IndexedDB 中。
+
+背景设置的设计调研：[docs/background-settings-research.md](docs/background-settings-research.md)
 
 完整隐私政策：[docs/privacy.html](docs/privacy.html)
 

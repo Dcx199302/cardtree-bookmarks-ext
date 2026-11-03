@@ -24,6 +24,9 @@ import { useTheme } from './useTheme';
 import { ConfirmDialog } from './ConfirmDialog';
 import { loadSearchEngines, saveSearchEngines, type SearchEngine, MAX_VISIBLE } from './searchEnginesStore';
 import { SearchEngineSettingsDialog } from './SearchEngineSettingsDialog';
+import { SettingsDialog } from './SettingsDialog';
+import { getBackgroundOption } from './backgroundCatalog';
+import { useBackgroundSettings } from './useBackgroundSettings';
 import { FloatingBookmarkGhost, RubberBandOverlay } from './bookmarkDragUI';
 import { BookmarkFolderCard, RootBookmarksCard } from './BookmarkDropZone';
 import { FolderDrillBreadcrumb } from './FolderDrillBreadcrumb';
@@ -162,6 +165,15 @@ function NewTab() {
   const trashToastTimerRef = useRef<number | null>(null);
  const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([]);
  const [showEngineSettings, setShowEngineSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const {
+    settings: backgroundSettings,
+    customBackgrounds,
+    isUploading: isUploadingBackground,
+    updateSettings: updateBackgroundSettings,
+    uploadCustomBackgrounds,
+    removeCustomBackground,
+  } = useBackgroundSettings();
   const [searchMode, setSearchMode] = useState<SearchMode>('bookmark');
   const searchModeRef = useRef(searchMode);
   searchModeRef.current = searchMode;
@@ -1521,6 +1533,16 @@ function NewTab() {
     saveSearchEngines(engines).catch(() => {});
   }, []);
 
+  const builtinBackground = getBackgroundOption(backgroundSettings.backgroundId);
+  const customBackground = customBackgrounds.find(background => background.id === backgroundSettings.backgroundId);
+  const selectedBackgroundUrl = builtinBackground?.image ?? customBackground?.url;
+  const backgroundStyle = selectedBackgroundUrl
+    ? {
+        '--background-dim': backgroundSettings.dim / 100,
+        '--background-blur': `${backgroundSettings.blur}px`,
+      } as React.CSSProperties
+    : undefined;
+
   const showNavSidebar = !isSearching && orderedNavItems.length > 0;
 
   if (loading) {
@@ -1565,12 +1587,14 @@ function NewTab() {
       prefocusedBookmarkId,
       setPrefocusedBookmarkId,
     }}>
-      <div className={`newtab${isBookmarkDragging ? ' newtab--bookmark-dragging' : ''}${showNavSidebar ? ' newtab--nav-sidebar' : ''}`} onContextMenu={handleAreaContext} onClick={(e) => {
+      <div className={`newtab${isBookmarkDragging ? ' newtab--bookmark-dragging' : ''}${showNavSidebar ? ' newtab--nav-sidebar' : ''}${selectedBackgroundUrl ? ' newtab--custom-background' : ''}`}
+        style={backgroundStyle} onContextMenu={handleAreaContext} onClick={(e) => {
         const target = e.target as HTMLElement;
         if (!target.closest('[data-bookmark-item="true"]') && selectedIds.size > 0) {
           clearSelection();
         }
       }}>
+        {selectedBackgroundUrl && <div className="newtab-background" style={{ backgroundImage: `url("${selectedBackgroundUrl}")` }} aria-hidden="true" />}
         <div className="newtab-header">
           <div className="newtab-header__inner">
             <div className="newtab-brand">
@@ -1604,10 +1628,27 @@ function NewTab() {
                   <path d="M11 17l2-2-3 1z" fill="currentColor" stroke="none" />
                 </svg>
               </a>
+              <button
+                className={`header-btn${showSettings ? ' header-btn--active' : ''}`}
+                onMouseEnter={(e) => showTooltip(e, '设置')}
+                onMouseLeave={hideTooltip}
+                onClick={() => {
+                  setShowTrash(false);
+                  setShowSettings(true);
+                }}
+                aria-label="设置">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
               <button className={`header-btn${trashItems.length > 0 ? ' header-btn--badge' : ''}`}
                 onMouseEnter={(e) => showTooltip(e, '回收站')}
                 onMouseLeave={hideTooltip}
-                onClick={() => setShowTrash(v => !v)}
+                onClick={() => {
+                  setShowSettings(false);
+                  setShowTrash(v => !v);
+                }}
                 aria-label="回收站">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -1623,7 +1664,7 @@ function NewTab() {
                     ? <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" />
                     : themeLabel === '浅色'
                     ? <><circle cx="12" cy="12" r="5" fill="currentColor" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></>
-                    : <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>
+                    : <><path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /></>
                   }
                 </svg>
               </button>
@@ -1680,6 +1721,18 @@ function NewTab() {
      {confirmState && (
        <ConfirmDialog message={confirmState.message} onConfirm={handleConfirm} onCancel={() => setConfirmState(null)} />
      )}
+
+      {showSettings && (
+        <SettingsDialog
+          backgroundSettings={backgroundSettings}
+          customBackgrounds={customBackgrounds}
+          isUploadingBackground={isUploadingBackground}
+          onBackgroundSettingsChange={updateBackgroundSettings}
+          onBackgroundUpload={uploadCustomBackgrounds}
+          onCustomBackgroundDelete={removeCustomBackground}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
 
       {showEngineSettings && (
         <SearchEngineSettingsDialog
