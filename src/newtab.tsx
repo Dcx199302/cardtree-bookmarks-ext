@@ -25,6 +25,9 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { loadSearchEngines, saveSearchEngines, type SearchEngine, MAX_VISIBLE } from './searchEnginesStore';
 import { SearchEngineSettingsDialog } from './SearchEngineSettingsDialog';
 import { SettingsDialog } from './SettingsDialog';
+import { PageCarousel } from './PageCarousel';
+import type { PageId } from './pageConfig';
+import { usePageOrder } from './usePageOrder';
 import { getBackgroundOption } from './backgroundCatalog';
 import { useBackgroundSettings } from './useBackgroundSettings';
 import { FloatingBookmarkGhost, RubberBandOverlay } from './bookmarkDragUI';
@@ -33,6 +36,33 @@ import { FolderDrillBreadcrumb } from './FolderDrillBreadcrumb';
 import '@xuchengdong/cardtree-react/styles/cascade.css';
 import './newtab.css';
 
+
+// CardTree 默认 dnd-kit DragOverlay 位于 Swiper transformed ancestor 内，
+// fixed 定位会被错误限制；这里用 portal 挂到 body 并按指针坐标自行定位。
+function CardTreeDragOverlay({ label }: { label: string }) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMove = (event: PointerEvent) => {
+      const overlay = overlayRef.current;
+      if (!overlay) return;
+      overlay.style.transform = `translate3d(${event.clientX + 14}px, ${event.clientY - 15}px, 0)`;
+      overlay.style.opacity = '1';
+    };
+    window.addEventListener('pointermove', handleMove);
+    return () => window.removeEventListener('pointermove', handleMove);
+  }, []);
+
+  return createPortal(
+    <div ref={overlayRef} className="card-tree-drag-overlay">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M8 7l-4 5 4 5M16 7l4 5-4 5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span>{label}</span>
+    </div>,
+    document.body,
+  );
+}
 
 // ── Trash Panel ──
 
@@ -190,11 +220,21 @@ function NewTab() {
   const lastCardPointerDownRef = useRef<{ folderId: string; x: number; y: number; time: number } | null>(null);
   const pendingCollapsedIdsRef = useRef<string[]>([]);
   const { cycle: cycleTheme, label: themeLabel } = useTheme();
+  const { order: pageOrder, ready: pageOrderReady, reorderOrder: reorderPageOrder } = usePageOrder();
+  const [activePageId, setActivePageId] = useState<PageId>('bookmarks');
+  const initialPageSelectedRef = useRef(false);
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setLastClickedId(null);
   }, []);
+
+  // 页面顺序从 storage 异步恢复后，默认进入当前顺序的第一页。
+  useEffect(() => {
+    if (!pageOrderReady || initialPageSelectedRef.current) return;
+    initialPageSelectedRef.current = true;
+    setActivePageId(pageOrder[0] ?? 'bookmarks');
+  }, [pageOrder, pageOrderReady]);
 
   const drillToFolder = useCallback((folderId: string | null) => {
     setDrillFolderId(folderId);
@@ -202,6 +242,7 @@ function NewTab() {
     setPrefocusedBookmarkId(null);
     clearSelection();
     window.scrollTo({ top: 0 });
+    document.querySelector<HTMLElement>('.newtab-page[data-page-id="bookmarks"] .newtab-page-body')?.scrollTo({ top: 0 });
   }, [clearSelection, setPrefocusedBookmarkId]);
 
   const selectFromBreadcrumb = useCallback((folderId: string | null) => {
@@ -886,6 +927,11 @@ function NewTab() {
     rubberBandOriginRef.current = null;
   }, []);
 
+  const handlePageGestureIntent = useCallback(() => {
+    finishRubberBand();
+    clearSelection();
+  }, [clearSelection, finishRubberBand]);
+
   useEffect(() => {
     const sub = bookmarkDragStart$.current.subscribe(start => {
       dragSessionRef.current?.moveSub.unsubscribe();
@@ -915,7 +961,10 @@ function NewTab() {
           if (clientY < EDGE_ZONE) delta = -SCROLL_SPEED * (1 - clientY / EDGE_ZONE);
           else if (clientY > vh - EDGE_ZONE) delta = SCROLL_SPEED * (1 - (vh - clientY) / EDGE_ZONE);
           if (delta) {
-            window.scrollBy(0, delta);
+            // 分页后书签页在 .newtab-page 内滚动，不能继续滚动 window。
+            const pageScroller = document.querySelector<HTMLElement>('.newtab-page[data-page-id="bookmarks"] .newtab-page-body');
+            if (pageScroller) pageScroller.scrollTop += delta;
+            else window.scrollBy(0, delta);
             scrollRaf = requestAnimationFrame(tick);
           }
         };
@@ -1230,6 +1279,7 @@ function NewTab() {
   const dragDropConfig: DragDropConfig = useMemo(() => ({
     enabled: true,
     showDragHandle: true,
+    dragOverlayRender: node => <CardTreeDragOverlay label={node.label} />,
     onDragStart: () => !searchQuery,
     onDrop: (dragId, target) => {
       // CardTree 根列表合并了多个 Chrome 根分区的子文件夹；targetParentId 为空时
@@ -1543,7 +1593,99 @@ function NewTab() {
       } as React.CSSProperties
     : undefined;
 
-  const showNavSidebar = !isSearching && orderedNavItems.length > 0;
+  const hasNavSidebar = !isSearching && orderedNavItems.length > 0;
+  const showNavSidebar = activePageId === 'bookmarks' && hasNavSidebar;
+
+  useEffect(() => {
+    if (activePageId === 'bookmarks') return;
+    searchRef.current?.clear();
+    query$.current.next('');
+    setSearchQuery('');
+    clearSelection();
+    setShowTrash(false);
+  }, [activePageId, clearSelection]);
+
+  const bookmarksHeader = (
+          <div className="newtab-header">
+            <div className="newtab-header__inner">
+              <div className="newtab-brand">
+                <svg className="newtab-logo" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CardTree">
+                  <rect width="128" height="128" rx="26" fill="#121414" />
+                  <path d="M38 47h53M38 81h34M64 31v66" stroke="#E2E4E6" strokeWidth="10" strokeLinecap="round" />
+                  <circle cx="90" cy="81" r="8" fill="#6D78D5" />
+                </svg>
+                <h1 className="newtab-title">CardTree</h1>
+              </div>
+              <div className="newtab-header-search">
+                <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} onModeChange={setSearchMode} />
+              </div>
+              <div className="header-actions" style={{ position: 'relative' }}>
+                <a className="header-btn" href="https://github.com/Dcx199302/cardtree-bookmarks-ext" target="_blank" aria-label="GitHub 仓库" rel="noopener noreferrer"
+                  onMouseEnter={(e) => showTooltip(e, 'GitHub 仓库')}
+                  onMouseLeave={hideTooltip}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                  </svg>
+                </a>
+                <a className="header-btn" href="https://gridnote.cn/" target="_blank" aria-label="查看作者作品" rel="noopener noreferrer"
+                  onMouseEnter={(e) => showTooltip(e, '查看作者作品')}
+                  onMouseLeave={hideTooltip}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="9" cy="7" r="3" />
+                    <path d="M3 22v-2c0-3 2.7-5.5 6-5.5" />
+                    <line x1="19" y1="4" x2="13" y2="15" />
+                    <path d="M11 17l2-2-3 1z" fill="currentColor" stroke="none" />
+                  </svg>
+                </a>
+                <button
+                  className={`header-btn${showSettings ? ' header-btn--active' : ''}`}
+                  onMouseEnter={(e) => showTooltip(e, '设置')}
+                  onMouseLeave={hideTooltip}
+                  onClick={() => {
+                    setShowTrash(false);
+                    setShowSettings(true);
+                  }}
+                  aria-label="设置">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </button>
+                <button className={`header-btn${trashItems.length > 0 ? ' header-btn--badge' : ''}`}
+                  onMouseEnter={(e) => showTooltip(e, '回收站')}
+                  onMouseLeave={hideTooltip}
+                  onClick={() => {
+                    setShowSettings(false);
+                    setShowTrash(v => !v);
+                  }}
+                  aria-label="回收站">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+                <button className="header-btn"
+                  onMouseEnter={(e) => showTooltip(e, `主题: ${themeLabel}`)}
+                  onMouseLeave={hideTooltip}
+                  onClick={cycleTheme}
+                  aria-label={`主题：${themeLabel}`}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    {themeLabel === '深色'
+                      ? <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" />
+                      : themeLabel === '浅色'
+                      ? <><circle cx="12" cy="12" r="5" fill="currentColor" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></>
+                      : <><path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /></>
+                    }
+                  </svg>
+                </button>
+                {showTrash && (
+                  <TrashPanel items={trashItems} parentValidMap={parentValidMap} parentTitleMap={parentTitleMap} toast={trashToast} onRestore={restoreFromTrash} onDelete={async (ids) => { await removeFromTrash(ids); refreshTrash(); }} onClear={() => confirm('确定清空回收站？', handleClearTrash)} onClose={() => setShowTrash(false)} />
+                )}
+              </div>
+            </div>
+          </div>
+  );
 
   if (loading) {
     return (
@@ -1587,7 +1729,7 @@ function NewTab() {
       prefocusedBookmarkId,
       setPrefocusedBookmarkId,
     }}>
-      <div className={`newtab${isBookmarkDragging ? ' newtab--bookmark-dragging' : ''}${showNavSidebar ? ' newtab--nav-sidebar' : ''}${selectedBackgroundUrl ? ' newtab--custom-background' : ''}`}
+      <div className={`newtab${isBookmarkDragging ? ' newtab--bookmark-dragging' : ''}${hasNavSidebar ? ' newtab--nav-sidebar' : ''}${selectedBackgroundUrl ? ' newtab--custom-background' : ''}`}
         style={backgroundStyle} onContextMenu={handleAreaContext} onClick={(e) => {
         const target = e.target as HTMLElement;
         if (!target.closest('[data-bookmark-item="true"]') && selectedIds.size > 0) {
@@ -1595,119 +1737,59 @@ function NewTab() {
         }
       }}>
         {selectedBackgroundUrl && <div className="newtab-background" style={{ backgroundImage: `url("${selectedBackgroundUrl}")` }} aria-hidden="true" />}
-        <div className="newtab-header">
-          <div className="newtab-header__inner">
-            <div className="newtab-brand">
-              <svg className="newtab-logo" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CardTree">
-                <rect width="128" height="128" rx="26" fill="#121414" />
-                <path d="M38 47h53M38 81h34M64 31v66" stroke="#E2E4E6" strokeWidth="10" strokeLinecap="round" />
-                <circle cx="90" cy="81" r="8" fill="#6D78D5" />
-              </svg>
-              <h1 className="newtab-title">CardTree</h1>
-            </div>
-            <div className="newtab-header-search">
-              <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} onModeChange={setSearchMode} />
-            </div>
-            <div className="header-actions" style={{ position: 'relative' }}>
-              <a className="header-btn" href="https://github.com/Dcx199302/cardtree-bookmarks-ext" target="_blank" aria-label="GitHub 仓库" rel="noopener noreferrer"
-                onMouseEnter={(e) => showTooltip(e, 'GitHub 仓库')}
-                onMouseLeave={hideTooltip}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                </svg>
-              </a>
-              <a className="header-btn" href="https://gridnote.cn/" target="_blank" aria-label="查看作者作品" rel="noopener noreferrer"
-                onMouseEnter={(e) => showTooltip(e, '查看作者作品')}
-                onMouseLeave={hideTooltip}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="9" cy="7" r="3" />
-                  <path d="M3 22v-2c0-3 2.7-5.5 6-5.5" />
-                  <line x1="19" y1="4" x2="13" y2="15" />
-                  <path d="M11 17l2-2-3 1z" fill="currentColor" stroke="none" />
-                </svg>
-              </a>
-              <button
-                className={`header-btn${showSettings ? ' header-btn--active' : ''}`}
-                onMouseEnter={(e) => showTooltip(e, '设置')}
-                onMouseLeave={hideTooltip}
-                onClick={() => {
-                  setShowTrash(false);
-                  setShowSettings(true);
-                }}
-                aria-label="设置">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
-              </button>
-              <button className={`header-btn${trashItems.length > 0 ? ' header-btn--badge' : ''}`}
-                onMouseEnter={(e) => showTooltip(e, '回收站')}
-                onMouseLeave={hideTooltip}
-                onClick={() => {
-                  setShowSettings(false);
-                  setShowTrash(v => !v);
-                }}
-                aria-label="回收站">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </button>
-              <button className="header-btn"
-                onMouseEnter={(e) => showTooltip(e, `主题: ${themeLabel}`)}
-                onMouseLeave={hideTooltip}
-                onClick={cycleTheme}
-                aria-label={`主题：${themeLabel}`}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  {themeLabel === '深色'
-                    ? <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" />
-                    : themeLabel === '浅色'
-                    ? <><circle cx="12" cy="12" r="5" fill="currentColor" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></>
-                    : <><path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /></>
-                  }
-                </svg>
-              </button>
-              {showTrash && (
-                <TrashPanel items={trashItems} parentValidMap={parentValidMap} parentTitleMap={parentTitleMap} toast={trashToast} onRestore={restoreFromTrash} onDelete={async (ids) => { await removeFromTrash(ids); refreshTrash(); }} onClear={() => confirm('确定清空回收站？', handleClearTrash)} onClose={() => setShowTrash(false)} />
-              )}
-            </div>
-          </div>
-        </div>
-
-        <main className="newtab-content">
-          <RootBookmarksCard sections={sortedRootSections} recentVisits={recentVisits} isSearching={!!searchQuery} />
-
-          <FolderDrillBreadcrumb
-            path={drillBreadcrumbPath}
-            onSelect={selectFromBreadcrumb}
-          />
-
-          {sortedSubNodes.length > 0 ? (
-            <div className="folder-drill-tree" onPointerDown={handleTreePointerDown}>
-              <CardTree
-                className={suppressAnim ? 'suppress-init-anim' : undefined}
-                ref={treeRef}
-                nodes={sortedSubNodes}
-                appearance={false}
-                renderNode={(node) => <BookmarkFolderCard node={node} bookmarks={bookmarkDataMap.get(node.sourceId) ?? []} />}
-                selectable={false}
-                dragDrop={dragDropConfig}
-                onExpandCollapse={handleExpandCollapse}
-                onNodeUpdate={(nodeId, updates) => {
-                  if (updates.label) chrome.bookmarks.update(nodeId, { title: updates.label });
-                }}
-                keyboardNavigation
-                virtualization
-                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-              />
-            </div>
-          ) : hasNoResults ? (
-            <div className="search-empty">未找到匹配的书签</div>
-          ) : null}
-        </main>
-
-        <NavRail items={orderedNavItems} hidden={!showNavSidebar} activeId={currentDrillFolder?.id ?? null} onClickItem={handleNavRailClick} onReorder={handleNavRailReorder} />
+        <PageCarousel
+          order={pageOrder}
+          activePageId={activePageId}
+          gestureDisabled={isBookmarkDragging}
+          onActivePageChange={setActivePageId}
+          onOrderChange={reorderPageOrder}
+          onGestureIntent={handlePageGestureIntent}
+          renderPage={(pageId) => {
+            if (pageId === 'bookmarks') {
+              return (
+                <div className="newtab-page-frame">
+                  {bookmarksHeader}
+                  <div className="newtab-page-body">
+                    <main className="newtab-content">
+                      <RootBookmarksCard sections={sortedRootSections} recentVisits={recentVisits} isSearching={!!searchQuery} />
+                      <FolderDrillBreadcrumb path={drillBreadcrumbPath} onSelect={selectFromBreadcrumb} />
+                      {sortedSubNodes.length > 0 ? (
+                        <div className="folder-drill-tree" onPointerDown={handleTreePointerDown}>
+                          <CardTree
+                            className={suppressAnim ? 'suppress-init-anim' : undefined}
+                            ref={treeRef}
+                            nodes={sortedSubNodes}
+                            appearance={false}
+                            renderNode={(node) => <BookmarkFolderCard node={node} bookmarks={bookmarkDataMap.get(node.sourceId) ?? []} />}
+                            selectable={false}
+                            dragDrop={dragDropConfig}
+                            onExpandCollapse={handleExpandCollapse}
+                            onNodeUpdate={(nodeId, updates) => {
+                              if (updates.label) chrome.bookmarks.update(nodeId, { title: updates.label });
+                            }}
+                            keyboardNavigation
+                            virtualization
+                            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                          />
+                        </div>
+                      ) : hasNoResults ? (
+                        <div className="search-empty">未找到匹配的书签</div>
+                      ) : null}
+                    </main>
+                  </div>
+                  <NavRail items={orderedNavItems} hidden={!showNavSidebar} activeId={currentDrillFolder?.id ?? null} onClickItem={handleNavRailClick} onReorder={handleNavRailReorder} />
+                </div>
+              );
+            }
+            return (
+              <div className="newtab-page-frame">
+                <div className="newtab-page-body">
+                  <main className="newtab-content newtab-page--empty" aria-label="功能页" />
+                </div>
+              </div>
+            );
+          }}
+        />
       </div>
 
       {menuState && (

@@ -31,6 +31,7 @@ function buildViews(records: CustomBackgroundRecord[], urls: Map<string, string>
       name: record.name,
       width: record.width,
       height: record.height,
+      isAnimated: record.isAnimated,
       createdAt: record.createdAt,
       url,
     };

@@ -231,7 +231,11 @@ function NavRail({ items, hidden, activeId, onClickItem, onReorder }: NavRailPro
           className="nav-rail__top"
           title="回到顶部"
           aria-label="回到顶部"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          onClick={() => {
+            const pageScroller = document.querySelector<HTMLElement>('.newtab-page[data-page-id="bookmarks"] .newtab-page-body');
+            if (pageScroller) pageScroller.scrollTo({ top: 0, behavior: 'smooth' });
+            else window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M8 3.5 3 8.25h10L8 3.5Z" fill="currentColor" />

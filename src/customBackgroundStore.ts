@@ -7,6 +7,7 @@ export interface CustomBackgroundRecord {
   blob: Blob;
   width: number;
   height: number;
+  isAnimated: boolean;
   createdAt: number;
 }
 
@@ -86,6 +87,7 @@ export async function createCustomBackground(file: File): Promise<CustomBackgrou
     blob: prepared.blob,
     width: prepared.width,
     height: prepared.height,
+    isAnimated: prepared.isAnimated,
     createdAt: Date.now(),
   };
 

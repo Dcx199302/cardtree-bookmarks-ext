@@ -137,7 +137,7 @@ export function BackgroundSettingsSection({
             </span>
             <span className="background-option__copy">
               <span className="background-option__title">{uploadLabel}</span>
-              <span className="background-option__description">支持多选 JPG / PNG / WebP</span>
+              <span className="background-option__description">支持多选 JPG / PNG / WebP / GIF / APNG</span>
             </span>
           </label>
 
@@ -163,7 +163,7 @@ export function BackgroundSettingsSection({
                   />
                   <span className="background-option__copy">
                     <span className="background-option__title">{background.name}</span>
-                    <span className="background-option__description">{background.width}×{background.height}</span>
+                    <span className="background-option__description">{background.width}×{background.height}{background.isAnimated ? ' · 动态' : ''}</span>
                   </span>
                   <svg className="background-option__check" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
@@ -191,7 +191,7 @@ export function BackgroundSettingsSection({
           </div>
         </div>
         {error && <p className="background-settings__error">{error}</p>}
-        <p className="background-settings__hint">自定义图片会自动压缩并仅保存在本设备。</p>
+        <p className="background-settings__hint">静态图片自动压缩，动态 GIF / WebP / APNG 保留原帧，仅保存在本设备。</p>
       </section>
 
     </section>

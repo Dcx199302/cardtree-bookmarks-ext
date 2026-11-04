@@ -219,11 +219,13 @@
 
 html {
   overflow-x: clip;
+  overscroll-behavior-x: none;
 }
 
 body {
+  overscroll-behavior-x: none;
   margin: 0;
-  padding: 0 0 16px;
+  padding: 0;
   background: var(--bg-page);
   color: var(--text-primary);
   font-family: "Inter var", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -240,7 +242,9 @@ body {
   flex-direction: column;
   width: 100%;
   max-width: none;
-  min-height: calc(100vh - 16px);
+  height: 100vh;
+  overflow: hidden;
+  overscroll-behavior-x: none;
   --shell-left: 16px;
   --nav-width: 216px;
   --main-width: min(1160px, calc(100% - 32px));
@@ -422,6 +426,205 @@ body {
   min-width: 0;
   margin-left: var(--main-left);
   padding: 20px 20px 96px;
+}
+
+/* ── Horizontal full-page carousel ── */
+.newtab-pages-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 100%;
+  min-height: 0;
+  overscroll-behavior-x: none;
+}
+
+.newtab-pages {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.newtab-page-track {
+  display: flex;
+  height: 100%;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  will-change: transform;
+}
+
+.newtab-page {
+  display: flex;
+  flex: 0 0 100%;
+  min-width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.newtab-page-frame {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
+.newtab-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.newtab-page-body > .newtab-content {
+  min-height: 100%;
+}
+
+.newtab-page--empty {
+  display: block;
+}
+
+/* NavRail 属于书签页的一部分；在 page frame 内改为 absolute，随整页一起滑动。 */
+.newtab-page-frame > .nav-rail {
+  position: absolute;
+}
+
+.card-tree-drag-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 240px;
+  height: 30px;
+  padding: 0 10px;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--overlay-bg);
+  box-shadow: var(--glass-shadow-elevated), var(--glass-inner-highlight);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: grabbing;
+}
+
+.card-tree-drag-overlay svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  stroke: var(--text-muted);
+}
+
+.card-tree-drag-overlay span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-indicator {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  z-index: 47;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--border) 72%, transparent),
+    var(--glass-inner-highlight);
+  backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-saturate));
+  transform: translateX(-50%);
+}
+
+.page-indicator__hint {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
+  font-size: 11px;
+  line-height: 22px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -2px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.page-indicator:hover .page-indicator__hint {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.page-indicator__dot {
+  position: relative;
+  width: 38px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.14s ease;
+}
+
+.page-indicator__dot::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--text-muted);
+  opacity: 0.55;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.page-indicator__dot:hover::after {
+  opacity: 0.85;
+}
+
+.page-indicator__dot--active::after {
+  background: var(--accent);
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.page-indicator__dot--dragging {
+  z-index: 1;
+  cursor: grabbing;
+  transition: none;
+}
+
+.page-indicator__dot--dragging::after {
+  opacity: 1;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.page-indicator__dot--drop-target::after {
+  background: var(--accent);
+  opacity: 0.75;
 }
 
 /* ── Bookmark Grid (inside card) ── */
