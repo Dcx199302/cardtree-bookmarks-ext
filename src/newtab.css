@@ -106,8 +106,8 @@
   --text-muted: #8a8f98;
   --border: rgba(255, 255, 255, 0.065);
   --border-hover: rgba(255, 255, 255, 0.12);
-  --accent: #6d78d5;
-  --accent-hover: #7a84de;
+  --accent: #818cf8;
+  --accent-hover: #94a0ff;
   --danger: #f34f52;
   --shadow: 0 0 0 1px rgba(0, 0, 0, 0.22);
   --surface-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
@@ -167,8 +167,8 @@
     --text-muted: #8a8f98;
     --border: rgba(255, 255, 255, 0.065);
     --border-hover: rgba(255, 255, 255, 0.12);
-    --accent: #6d78d5;
-    --accent-hover: #7a84de;
+    --accent: #818cf8;
+    --accent-hover: #94a0ff;
     --danger: #f34f52;
     --shadow: 0 0 0 1px rgba(0, 0, 0, 0.22);
     --surface-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
@@ -482,10 +482,6 @@ body {
 
 .newtab-page-body > .newtab-content {
   min-height: 100%;
-}
-
-.newtab-page--empty {
-  display: block;
 }
 
 /* NavRail 属于书签页的一部分；在 page frame 内改为 absolute，随整页一起滑动。 */
@@ -1173,6 +1169,14 @@ body {
 
 .search-bar-input::placeholder {
   color: var(--text-muted);
+}
+
+/* 输入自身不绘制焦点框；焦点反馈由外层搜索胶囊统一承担。 */
+.search-bar-input:focus,
+.search-bar-input:focus-visible {
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 .search-bar-clear {
@@ -3736,4 +3740,919 @@ a:focus-visible {
   .background-slider {
     grid-template-columns: 68px minmax(0, 1fr) 44px;
   }
+}
+
+/* ── Workspace page ── */
+.workspace-page {
+  /* 保持与书签页主体完全相同的宽度与居中关系；
+     右侧浮动导航通过绝对定位突出，不参与主体布局计算。 */
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 20px 84px;
+}
+
+.workspace-panel {
+  position: relative;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  background-color: color-mix(in srgb, var(--overlay-bg) 42%, transparent);
+  box-shadow: var(--glass-shadow), var(--glass-inner-highlight);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+.workspace-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-panel__heading {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspace-panel-description {
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-panel-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.003em;
+  line-height: 20px;
+}
+
+.workspace-search {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 20px 14px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      color-mix(in srgb, var(--glass-bg) 82%, transparent) 34%,
+      color-mix(in srgb, var(--overlay-bg) 80%, transparent) 72%,
+      color-mix(in srgb, var(--accent) 10%, transparent)
+    );
+  box-shadow: 0 10px 30px rgba(15, 17, 21, 0.08);
+}
+
+.workspace-search__form {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 680px;
+  min-height: 46px;
+  padding: 0 6px 0 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 62%, transparent), 0 10px 28px rgba(15, 17, 21, 0.08);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.workspace-search__form:hover {
+  border-color: var(--glass-border-hover);
+}
+
+.workspace-search__form:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--border) 62%, transparent);
+}
+
+/* 输入元素自身不重复绘制方形焦点框，焦点态由胶囊外层统一承担。 */
+.workspace-search__form input:focus,
+.workspace-search__form input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.workspace-search__form svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+  stroke: currentColor;
+}
+
+.workspace-search__current-engine {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+
+.workspace-search__current-engine .bookmark-favicon,
+.workspace-search__current-engine .bookmark-favicon-svg {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+}
+
+.workspace-search__form input {
+  min-width: 0;
+  height: 44px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+}
+
+.workspace-search__form input::placeholder {
+  color: var(--text-secondary);
+}
+
+.workspace-search__form button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  min-height: 38px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-family: inherit;
+  font-size: 14px !important;
+  font-weight: 550 !important;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 22%, transparent) !important;
+  transition: background 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease !important;
+}
+
+.workspace-search__form button::before {
+  content: '';
+  position: absolute;
+  left: -9px;
+  top: 50%;
+  width: 1px;
+  height: 18px;
+  transform: translateY(-50%);
+  background: var(--border);
+  opacity: 0.8;
+}
+
+.workspace-search__form button:hover {
+  background: var(--accent-hover) !important;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 26%, transparent) !important;
+}
+
+.workspace-search__form button svg {
+  width: 17px;
+  height: 17px;
+  /* 覆盖左侧图标的主题色，继承按钮的白色文字，避免与背景同色。 */
+  color: inherit;
+  stroke: currentColor;
+}
+
+.workspace-search__engines {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 4px;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.workspace-search__engines::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-search__engine {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.workspace-search__engine:hover {
+  border-color: var(--glass-border);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-search__engine--active,
+.workspace-search__engine--active:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.workspace-search__engine-settings {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.workspace-search__engine-settings:hover {
+  border-color: var(--glass-border);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-search__engine-settings svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+}
+
+.workspace-search__engine-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.workspace-search__engine-icon .bookmark-favicon,
+.workspace-search__engine-icon .bookmark-favicon-svg {
+  width: 16px;
+  height: 16px;
+}
+
+.workspace-search__engine-name {
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-primary-button {
+  min-height: 28px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.workspace-primary-button:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+}
+
+.workspace-primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.workspace-icon-button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.workspace-icon-button:hover:not(:disabled),
+.workspace-icon-button:focus-visible {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.workspace-icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.workspace-icon-button svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+}
+
+.workspace-danger-button {
+  color: var(--danger) !important;
+}
+
+.workspace-danger-button:hover:not(:disabled),
+.workspace-danger-button:focus-visible {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  color: var(--danger) !important;
+}
+
+.workspace-grid {
+  --workspace-panel-height: clamp(320px, calc(100vh - 178px), 420px);
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 4fr);
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  align-items: start;
+}
+
+/* ── Todo ── */
+.workspace-panel--todo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: var(--workspace-panel-height);
+}
+
+.workspace-panel__header--todo {
+  align-items: center;
+}
+
+.workspace-todo__progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--overlay-bg) 30%, transparent);
+}
+
+.workspace-todo__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 58%, #22d3ee));
+  transition: width 0.2s ease;
+}
+
+.workspace-todo__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 7px;
+}
+
+.workspace-todo__form input,
+.workspace-todo__item > input,
+.workspace-tab-group__header input,
+.workspace-tab-group__item--editing input,
+.workspace-tab-add input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--dialog-input-border);
+  border-radius: 7px;
+  background: var(--dialog-input-bg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.workspace-todo__form input::placeholder,
+.workspace-tab-add input::placeholder {
+  color: var(--text-muted);
+}
+
+.workspace-todo__form input:focus,
+.workspace-todo__item > input:focus,
+.workspace-tab-group__header input:focus,
+.workspace-tab-group__item--editing input:focus,
+.workspace-tab-add input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.workspace-todo__form button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  cursor: pointer;
+}
+
+.workspace-todo__form button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.workspace-todo__form button:not(:disabled):hover {
+  background: var(--accent-hover) !important;
+}
+
+.workspace-todo__form button svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+}
+
+.workspace-todo__filters {
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--overlay-bg) 20%, transparent);
+}
+
+.workspace-todo__filter {
+  flex: 1;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.workspace-todo__filter:hover {
+  color: var(--text-primary);
+}
+
+.workspace-todo__filter--active,
+.workspace-todo__filter--active:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--glass-border);
+}
+
+.workspace-todo__list {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 4px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.workspace-todo__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 37px;
+  padding: 0 5px;
+  border-radius: 7px;
+  transition: background 0.14s ease;
+}
+
+.workspace-todo__item:hover {
+  background: var(--bg-hover);
+}
+
+.workspace-todo__item label {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.workspace-todo__item input[type='checkbox'] {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.workspace-todo__checkbox {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid color-mix(in srgb, var(--text-muted) 62%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: transparent;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.workspace-todo__checkbox svg {
+  width: 10px;
+  height: 10px;
+  stroke: currentColor;
+}
+
+.workspace-todo__item label:hover .workspace-todo__checkbox {
+  border-color: var(--accent);
+}
+
+.workspace-todo__item input[type='checkbox']:checked + .workspace-todo__checkbox {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.workspace-todo__item input[type='checkbox']:focus-visible + .workspace-todo__checkbox {
+  box-shadow: var(--focus-ring);
+}
+
+.workspace-todo__text {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-todo__item--done .workspace-todo__text {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.workspace-todo__actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+
+.workspace-todo__item:hover .workspace-todo__actions,
+.workspace-todo__item:focus-within .workspace-todo__actions {
+  opacity: 1;
+}
+
+.workspace-todo__empty {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.workspace-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+/* 固定高度面板内的间距由 column gap 提供。 */
+.workspace-panel--todo .workspace-error,
+.workspace-panel--tabs .workspace-error {
+  margin: 0;
+}
+
+.workspace-panel--tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: var(--workspace-panel-height);
+}
+
+.workspace-panel__header--tabs {
+  align-items: center;
+}
+
+/* 列表和详情合并到同一个卡片内部，不再作为独立 glass 面板参与布局。 */
+.workspace-tab-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace-tab-nav {
+  display: flex;
+  width: 168px;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--overlay-bg) 18%, transparent);
+}
+
+.workspace-tab-nav__list {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.workspace-tab-nav__list::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-tab-nav__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.workspace-tab-nav__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace-tab-nav__item--active,
+.workspace-tab-nav__item--active:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.workspace-tab-nav__title {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab-nav__count {
+  min-width: 19px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 17px;
+  text-align: center;
+}
+
+.workspace-tab-nav__item--active .workspace-tab-nav__count {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.workspace-tab-nav__empty {
+  padding: 8px 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.workspace-tab-detail {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.workspace-tab-group {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--overlay-bg) 22%, transparent);
+}
+
+.workspace-tab-group__header > input {
+  flex: 1;
+  width: 100%;
+}
+
+.workspace-tab-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  margin-bottom: 7px;
+}
+
+.workspace-tab-group__header > div {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.workspace-tab-group__header h3 {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab-group__header > div > span {
+  flex: 1;
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab-group__actions,
+.workspace-tab-item__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.workspace-tab-group li .workspace-tab-item__actions {
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+
+/* 与待办列表一致：hover 或键盘聚焦时显示操作按钮。 */
+.workspace-tab-group li:hover .workspace-tab-item__actions,
+.workspace-tab-group li:focus-within .workspace-tab-item__actions,
+.workspace-tab-item__actions--visible {
+  opacity: 1;
+}
+
+.workspace-tab-group li.workspace-tab-group__item--editing {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.workspace-tab-group li.workspace-tab-group__item--editing input {
+  min-width: 0;
+  width: 100%;
+  grid-column: 1 / 2;
+  justify-self: stretch;
+}
+
+.workspace-tab-group li.workspace-tab-group__item--editing .workspace-tab-item__actions {
+  grid-column: 2 / 3;
+}
+
+.workspace-tab-group ul {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 2px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  /* hover 只在列表自己的 paint containment 内重绘，避免波及其他 glass 面板。 */
+  contain: paint;
+}
+
+.workspace-tab-group li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 5px;
+  border-radius: 5px;
+}
+
+.workspace-tab-group li:hover {
+  background: var(--bg-hover);
+}
+
+.workspace-tab-group li > a {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.workspace-tab-group li > a span {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab-group li > a small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab-group li > a:hover span {
+  color: var(--text-primary);
+}
+
+.workspace-tab-add {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.5fr) minmax(0, 1fr) auto auto;
+  flex: 0 0 auto;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.workspace-tab-add-button {
+  width: 100%;
+  min-height: 28px;
+  height: 28px;
+  margin-top: 7px;
+  border: 1px dashed var(--border-hover);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.workspace-tab-add-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workspace-tab-add-button:hover:not(:disabled),
+.workspace-tab-add-button:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: var(--text-primary);
 }

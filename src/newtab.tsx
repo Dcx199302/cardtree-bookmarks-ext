@@ -33,6 +33,7 @@ import { useBackgroundSettings } from './useBackgroundSettings';
 import { FloatingBookmarkGhost, RubberBandOverlay } from './bookmarkDragUI';
 import { BookmarkFolderCard, RootBookmarksCard } from './BookmarkDropZone';
 import { FolderDrillBreadcrumb } from './FolderDrillBreadcrumb';
+import { WorkspacePage } from './WorkspacePage';
 import '@xuchengdong/cardtree-react/styles/cascade.css';
 import './newtab.css';
 
@@ -1784,7 +1785,7 @@ function NewTab() {
             return (
               <div className="newtab-page-frame">
                 <div className="newtab-page-body">
-                  <main className="newtab-content newtab-page--empty" aria-label="功能页" />
+                  <WorkspacePage engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} />
                 </div>
               </div>
             );

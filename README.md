@@ -23,7 +23,8 @@
 - **左侧导航栏** — 快速跳转任意文件夹，支持拖拽调整顺序
 - **主题切换** — 浅色 / 深色 / 跟随系统，毛玻璃质感 UI
 - **背景设置** — 支持内置 Unsplash 壁纸与本机静态 / 动态图片上传，提供图库管理、遮罩、模糊与自动保存
-- **横向分页** — 书签页与预留功能页支持拖拽 / 指示点切换，页面顺序可在底部指示点上拖动调整
+- **横向分页** — 书签页与工作台支持拖拽 / 指示点切换，页面顺序可在底部指示点上拖动调整
+- **工作台** — 提供快速搜索、Todo 与 OneTab 风格标签存档管理
 - **访问追踪** — 记录书签使用频率和最近访问时间
 
 ## 安装
@@ -92,6 +93,12 @@ src/
 ├── backgroundCatalog.ts    # 内置背景目录
 ├── backgroundSettingsStore.ts # 背景设置持久化
 ├── PageCarousel.tsx # 横向分页容器与指示点
+├── WorkspacePage.tsx # 工作台页面组合
+├── WorkspaceSearch.tsx # 工作台搜索引擎搜索
+├── TodoCard.tsx # 工作台 Todo
+├── TabCollectionCard.tsx # OneTab 风格标签存档
+├── todoStore.ts # Todo 持久化
+├── tabCollectionStore.ts # 标签存档持久化
 ├── pageConfig.ts # 固定分页配置
 ├── pageOrderStore.ts # 页面顺序持久化
 ├── usePageOrder.ts # 页面顺序状态 hook
