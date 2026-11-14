@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useDialogEscape } from './useDialogEscape';
 import type { CardTreeNode } from '@xuchengdong/cardtree-react';
 import type { BookmarkItem } from './bookmarks';
 
@@ -90,9 +91,13 @@ export function BookmarkDialog({ state, onSave, onMove, onBatchMove, onCancel }:
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); handleSave(); }
-    else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+    }
   };
+
+  useDialogEscape(onCancel);
 
   const filteredFolders = useMemo(() => {
     if (!state.folders) return [];
@@ -102,8 +107,13 @@ export function BookmarkDialog({ state, onSave, onMove, onBatchMove, onCancel }:
   }, [state.folders, search]);
 
   return (
-    <div className="dialog-backdrop" onClick={onCancel}>
-      <div className="dialog-card" onClick={e => e.stopPropagation()}>
+    <div className="dialog-backdrop">
+      <div
+        className="dialog-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label={isBatchMove ? '批量移动书签' : TITLES[state.mode]}
+      >
         <h3 className="dialog-title">
           {isBatchMove ? `移动 ${state.bookmarkIds?.length ?? 0} 个书签` : isMove ? `移动「${state.bookmarkTitle ?? ''}」` : TITLES[state.mode]}
         </h3>

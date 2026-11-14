@@ -21,10 +21,11 @@
 - **搜索** — 实时防抖搜索，自动展开匹配的文件夹
 - **回收站** — 删除的书签可在 30 天内恢复到原位置
 - **左侧导航栏** — 快速跳转任意文件夹，支持拖拽调整顺序
+- **右侧工具栏** — 在书签单页中直接管理标签存档与剪贴板记录
+- **标签存档** — 选择当前窗口标签页保存为存档，支持查看、重命名、全部打开与删除
+- **剪贴板** — 以列表 / 编辑双栏管理常用文本，支持搜索、编辑、一键复制与增删改查
 - **主题切换** — 浅色 / 深色 / 跟随系统，毛玻璃质感 UI
 - **背景设置** — 支持内置 Unsplash 壁纸与本机静态 / 动态图片上传，提供图库管理、遮罩、模糊与自动保存
-- **横向分页** — 书签页与工作台支持拖拽 / 指示点切换，页面顺序可在底部指示点上拖动调整
-- **工作台** — 提供快速搜索、Todo 与 OneTab 风格标签存档管理
 - **访问追踪** — 记录书签使用频率和最近访问时间
 
 ## 安装
@@ -68,7 +69,6 @@ npm run build    # TypeScript 类型检查 + 构建
 | Vite 6 | 构建工具 |
 | [@xuchengdong/cardtree-react](https://www.npmjs.com/package/@xuchengdong/cardtree-react) | 卡片树核心组件 |
 | RxJS | 搜索防抖、拖拽会话管理 |
-| Swiper 14 | 横向分页的跟手拖拽、动量回弹与精确 snap |
 
 ## 项目结构
 
@@ -92,16 +92,16 @@ src/
 ├── BackgroundSettingsSection.tsx # 背景设置分区
 ├── backgroundCatalog.ts    # 内置背景目录
 ├── backgroundSettingsStore.ts # 背景设置持久化
-├── PageCarousel.tsx # 横向分页容器与指示点
-├── WorkspacePage.tsx # 工作台页面组合
-├── WorkspaceSearch.tsx # 工作台搜索引擎搜索
-├── TodoCard.tsx # 工作台 Todo
-├── TabCollectionCard.tsx # OneTab 风格标签存档
-├── todoStore.ts # Todo 持久化
+├── InlineSearch.tsx # 书签页内容区紧凑搜索引擎搜索
+├── WorkspaceSearch.tsx # 搜索引擎搜索组件
+├── BookmarkUtilitiesRail.tsx # 右侧标签存档 / 剪贴板工具栏
+├── TabArchiveRail.tsx # 标签存档窄栏与弹窗
+├── ClipboardRail.tsx # 剪贴板窄栏入口
+├── ClipboardManager.tsx # 剪贴板完整管理面板
+├── UtilityDialog.tsx # 右侧工具栏通用弹窗
+├── WorkspaceIconButton.tsx # 图标按钮
+├── clipboardStore.ts # 剪贴板记录持久化
 ├── tabCollectionStore.ts # 标签存档持久化
-├── pageConfig.ts # 固定分页配置
-├── pageOrderStore.ts # 页面顺序持久化
-├── usePageOrder.ts # 页面顺序状态 hook
 ├── backgroundImageProcessing.ts # 本地背景压缩与规格化
 ├── customBackgroundStore.ts # 自定义背景 IndexedDB 存储
 ├── useBackgroundSettings.ts # 背景设置状态 hook

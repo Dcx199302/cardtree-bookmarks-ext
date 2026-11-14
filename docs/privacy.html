@@ -80,18 +80,19 @@
 
     <!-- English -->
     <div id="en" class="content active">
-      <p class="subtitle" style="margin-top:0">Last updated: November 3, 2026</p>
+      <p class="subtitle" style="margin-top:0">Last updated: November 14, 2026</p>
 
       <h2>Overview</h2>
       <p>CardTree Bookmarks is a Chrome extension that replaces the default new tab page with a card-tree bookmark manager. We respect your privacy and are committed to protecting your personal data.</p>
 
       <h2>Data Collection</h2>
-      <p><strong>CardTree Bookmarks does not collect, transmit, or store any personal data on external servers.</strong> Preferences are stored locally using Chrome's built-in <code>chrome.storage.local</code> API. Custom background images are compressed in the browser and stored locally using IndexedDB.</p>
+      <p><strong>CardTree Bookmarks does not collect, transmit, or store any personal data on external servers.</strong> Preferences and utility data (including clipboard records) are stored locally using Chrome's built-in <code>chrome.storage.local</code> API. Custom background images are compressed in the browser and stored locally using IndexedDB.</p>
 
       <h2>Permissions</h2>
       <ul>
        <li><strong>bookmarks</strong> &mdash; Required to read, create, move, and delete your bookmarks.</li>
-       <li><strong>storage</strong> &mdash; Used to save your preferences (theme, display settings, trash items, search history, and last-used search engine) locally.</li>
+       <li><strong>storage</strong> &mdash; Used to save your preferences and utility data (theme, display settings, trash items, search history, tab archives, clipboard records, and last-used search engine) locally.</li>
+       <li><strong>clipboardWrite</strong> &mdash; Used only when you click the copy button to write a selected clipboard record to the system clipboard. The extension never reads your clipboard.</li>
        <li><strong>favicon</strong> &mdash; Used to display website icons next to bookmarks.</li>
         <li><strong>tabs</strong> &mdash; Used to open bookmarks in new tabs and track active tab state for visit counting.</li>
         <li><strong>sessions</strong> &mdash; Used to show recently closed tabs on the new tab page.</li>
@@ -114,18 +115,19 @@
 
     <!-- 中文 -->
     <div id="zh" class="content">
-      <p class="subtitle" style="margin-top:0">最后更新：2026 年 11 月 3 日</p>
+      <p class="subtitle" style="margin-top:0">最后更新：2026 年 11 月 14 日</p>
 
       <h2>概述</h2>
       <p>CardTree Bookmarks 是一款 Chrome 浏览器扩展，将默认新标签页替换为卡片树书签管理器。我们尊重您的隐私，致力于保护您的个人数据。</p>
 
       <h2>数据收集</h2>
-      <p><strong>CardTree Bookmarks 不会收集、传输或在外部服务器上存储任何个人数据。</strong>偏好设置通过 Chrome 内置的 <code>chrome.storage.local</code> API 存储在您的本地设备上；自定义背景图片会在浏览器内压缩，并使用 IndexedDB 保存在本地。</p>
+      <p><strong>CardTree Bookmarks 不会收集、传输或在外部服务器上存储任何个人数据。</strong>偏好设置与工具数据（包括剪贴板记录）通过 Chrome 内置的 <code>chrome.storage.local</code> API 存储在您的本地设备上；自定义背景图片会在浏览器内压缩，并使用 IndexedDB 保存在本地。</p>
 
       <h2>权限说明</h2>
       <ul>
         <li><strong>bookmarks（书签）</strong> &mdash; 用于读取、创建、移动和删除您的书签。</li>
-       <li><strong>storage（存储）</strong> &mdash; 用于在本地保存您的偏好设置（主题、显示设置、回收站项目、搜索历史和上次使用的搜索引擎）。</li>
+       <li><strong>storage（存储）</strong> &mdash; 用于在本地保存您的偏好设置与工具数据（主题、显示设置、回收站项目、搜索历史、标签存档、剪贴板记录和上次使用的搜索引擎）。</li>
+       <li><strong>clipboardWrite（写入剪贴板）</strong> &mdash; 仅在您点击复制按钮时，将选中的剪贴板记录写入系统剪贴板。本扩展不会读取您的剪贴板。</li>
         <li><strong>favicon（图标）</strong> &mdash; 用于在书签旁显示网站图标。</li>
         <li><strong>tabs（标签页）</strong> &mdash; 用于在新标签页中打开书签，并追踪活动标签页状态以统计访问次数。</li>
         <li><strong>sessions（会话）</strong> &mdash; 用于在新标签页上显示最近关闭的标签页。</li>

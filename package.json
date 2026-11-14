@@ -17,8 +17,7 @@
     "@xuchengdong/cardtree-react": "^0.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "rxjs": "^7.8.2",
-    "swiper": "^14.4.0"
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import type { SearchEngine } from './searchEnginesStore';
 import { genEngineId, resetToDefaults } from './searchEnginesStore';
 import { FaviconImg } from './FaviconImg';
+import { useDialogEscape } from './useDialogEscape';
 
 interface SearchEngineSettingsDialogProps {
   engines: SearchEngine[];
@@ -113,12 +114,14 @@ export function SearchEngineSettingsDialog({ engines, onChange, onClose }: Searc
     closeEditor();
   };
 
+  useDialogEscape(onClose);
+
   const enabledCount = engines.filter(e => e.enabled).length;
   const showList = editorMode === null;
 
   return (
-    <div className="dialog-backdrop" onClick={onClose}>
-      <div className="dialog-card engine-dialog-card" onClick={e => e.stopPropagation()}>
+    <div className="dialog-backdrop">
+      <div className="dialog-card engine-dialog-card" role="dialog" aria-modal="true" aria-label="搜索引擎设置">
         {showList ? (
           <>
             <div className="engine-dialog-header">

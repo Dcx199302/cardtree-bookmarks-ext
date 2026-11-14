@@ -11,10 +11,12 @@ export interface TabCollection {
   tabs: SavedTabItem[];
 }
 
-const STORAGE_KEY = 'workspaceTabCollections';
+export const TAB_COLLECTIONS_STORAGE_KEY = 'workspaceTabCollections';
+const STORAGE_KEY = TAB_COLLECTIONS_STORAGE_KEY;
 export const MAX_COLLECTIONS = 30;
 export const MAX_TABS_PER_COLLECTION = 100;
-const MAX_TITLE_LENGTH = 120;
+export const MAX_TAB_TITLE_LENGTH = 120;
+const MAX_TITLE_LENGTH = MAX_TAB_TITLE_LENGTH;
 
 export function normalizeTabTitle(raw: string): string {
   const value = raw.trim().slice(0, MAX_TITLE_LENGTH);

@@ -10,10 +10,12 @@ import type { BookmarkItem } from './bookmarks';
 import { deleteBookmark, deleteFolder, moveBookmark } from './bookmarkActions';
 import { loadTrash, addToTrash, removeFromTrash, clearTrash, resolveRestoreParent, validateTrashParents, groupTrashByDate, type TrashItem } from './trashStore';
 import { recordVisit } from './visitTracker';
-import { SearchBar, type SearchBarRef, type SearchMode } from './SearchBar';
+import { SearchBar, type SearchBarRef } from './SearchBar';
+import { InlineSearch, type InlineSearchRef } from './InlineSearch';
 import { ContextMenu, type MenuItem } from './ContextMenu';
 import { BookmarkDialog, type DialogState, buildFolderOptions } from './BookmarkDialog';
 import NavRail from './NavRail';
+import { BookmarkUtilitiesRail } from './BookmarkUtilitiesRail';
 import type { NavItem } from './NavRail';
 import { loadFolderDisplaySettings, setFolderDisplaySize, cleanupOrphanedSettings, loadCollapsedIds, saveCollapsedIds, loadNavRailOrder, saveNavRailOrder, type FolderDisplaySizeSettings, type NavRailOrder } from './folderDisplaySettings';
 import { loadLastDrillFolderId, saveLastDrillFolderId } from './folderDrillStore';
@@ -25,15 +27,11 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { loadSearchEngines, saveSearchEngines, type SearchEngine, MAX_VISIBLE } from './searchEnginesStore';
 import { SearchEngineSettingsDialog } from './SearchEngineSettingsDialog';
 import { SettingsDialog } from './SettingsDialog';
-import { PageCarousel } from './PageCarousel';
-import type { PageId } from './pageConfig';
-import { usePageOrder } from './usePageOrder';
 import { getBackgroundOption } from './backgroundCatalog';
 import { useBackgroundSettings } from './useBackgroundSettings';
 import { FloatingBookmarkGhost, RubberBandOverlay } from './bookmarkDragUI';
 import { BookmarkFolderCard, RootBookmarksCard } from './BookmarkDropZone';
 import { FolderDrillBreadcrumb } from './FolderDrillBreadcrumb';
-import { WorkspacePage } from './WorkspacePage';
 import '@xuchengdong/cardtree-react/styles/cascade.css';
 import './newtab.css';
 
@@ -149,11 +147,53 @@ function TrashPanel({ items, parentValidMap, parentTitleMap, toast, onRestore, o
   );
 }
 
+// Chrome 新标签页返回时 history.state 不稳定；sessionStorage 能随当前标签页同步保留。
+interface PageScrollState {
+  drillFolderId: string | null;
+  scrollTop: number;
+}
+
+const PAGE_SCROLL_STORAGE_KEY = 'cardtree:newtab-scroll-position';
+
+function loadPageScrollState(): PageScrollState | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(PAGE_SCROLL_STORAGE_KEY) ?? '');
+    if (
+      typeof value !== 'object' || value === null ||
+      typeof value.scrollTop !== 'number' ||
+      !('drillFolderId' in value)
+    ) return null;
+    const drillFolderId = value.drillFolderId;
+    if (drillFolderId !== null && typeof drillFolderId !== 'string') return null;
+    return { drillFolderId, scrollTop: value.scrollTop };
+  } catch {
+    return null;
+  }
+}
+
+function savePageScrollState(state: PageScrollState): void {
+  try {
+    sessionStorage.setItem(PAGE_SCROLL_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // 隐私模式或存储被禁用时不影响正常浏览。
+  }
+}
+
+function removePageScrollState(): void {
+  try {
+    sessionStorage.removeItem(PAGE_SCROLL_STORAGE_KEY);
+  } catch {
+    // 忽略清理失败。
+  }
+}
+
 // ── Main Component ──
 
 function NewTab() {
   const treeRef = useRef<CardTreeRef>(null);
+  const pageBodyRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<SearchBarRef>(null);
+  const engineSearchRef = useRef<InlineSearchRef>(null);
   const latestNodesRef = useRef<CardTreeNode<BookmarkItem[]>[]>([]);
   const pendingSelfMoveIdsRef = useRef(new Map<string, number>());
   const bookmarkDragStart$ = useRef(new Subject<BookmarkPointerDragStart>());
@@ -205,9 +245,6 @@ function NewTab() {
     uploadCustomBackgrounds,
     removeCustomBackground,
   } = useBackgroundSettings();
-  const [searchMode, setSearchMode] = useState<SearchMode>('bookmark');
-  const searchModeRef = useRef(searchMode);
-  searchModeRef.current = searchMode;
  const [recentVisits, setRecentVisits] = useState<{ title: string; url: string; lastVisitTime: number }[]>([]);
   const [focusedBookmarkId, setFocusedBookmarkId] = useState<string | null>(null);
   const [prefocusedBookmarkId, setPrefocusedBookmarkIdRaw] = useState<string | null>(null);
@@ -221,21 +258,46 @@ function NewTab() {
   const lastCardPointerDownRef = useRef<{ folderId: string; x: number; y: number; time: number } | null>(null);
   const pendingCollapsedIdsRef = useRef<string[]>([]);
   const { cycle: cycleTheme, label: themeLabel } = useTheme();
-  const { order: pageOrder, ready: pageOrderReady, reorderOrder: reorderPageOrder } = usePageOrder();
-  const [activePageId, setActivePageId] = useState<PageId>('bookmarks');
-  const initialPageSelectedRef = useRef(false);
-
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setLastClickedId(null);
   }, []);
 
-  // 页面顺序从 storage 异步恢复后，默认进入当前顺序的第一页。
+  const savePageScrollPosition = useCallback(() => {
+    const pageBody = pageBodyRef.current;
+    if (!pageBody) return;
+    savePageScrollState({ drillFolderId, scrollTop: pageBody.scrollTop });
+  }, [drillFolderId]);
+
   useEffect(() => {
-    if (!pageOrderReady || initialPageSelectedRef.current) return;
-    initialPageSelectedRef.current = true;
-    setActivePageId(pageOrder[0] ?? 'bookmarks');
-  }, [pageOrder, pageOrderReady]);
+    const handlePageHide = () => savePageScrollPosition();
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
+  }, [savePageScrollPosition]);
+
+  // 折叠状态和虚拟列表都会影响内容高度；等待高度可达后再恢复，避免 scrollTop 被浏览器截断为 0。
+  useEffect(() => {
+    if (loading) return;
+    const savedState = loadPageScrollState();
+    if (!savedState || savedState.drillFolderId !== drillFolderId) return;
+
+    removePageScrollState();
+    let frame = 0;
+    let attempt = 0;
+    const restore = () => {
+      const pageBody = pageBodyRef.current;
+      const maxScrollTop = pageBody ? pageBody.scrollHeight - pageBody.clientHeight : 0;
+      attempt += 1;
+
+      if (!pageBody || (maxScrollTop + 1 < savedState.scrollTop && attempt < 30)) {
+        frame = window.requestAnimationFrame(restore);
+        return;
+      }
+      pageBody?.scrollTo({ top: savedState.scrollTop });
+    };
+    frame = window.requestAnimationFrame(restore);
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading, drillFolderId]);
 
   const drillToFolder = useCallback((folderId: string | null) => {
     setDrillFolderId(folderId);
@@ -243,7 +305,7 @@ function NewTab() {
     setPrefocusedBookmarkId(null);
     clearSelection();
     window.scrollTo({ top: 0 });
-    document.querySelector<HTMLElement>('.newtab-page[data-page-id="bookmarks"] .newtab-page-body')?.scrollTo({ top: 0 });
+    document.querySelector<HTMLElement>('.newtab-page-body')?.scrollTo({ top: 0 });
   }, [clearSelection, setPrefocusedBookmarkId]);
 
   const selectFromBreadcrumb = useCallback((folderId: string | null) => {
@@ -391,17 +453,19 @@ function NewTab() {
         pendingCollapsedIdsRef.current = [];
       }
 
+      // 显示尺寸会影响内容高度；先加载完成，再进入渲染态，保证返回时能恢复到准确位置。
+      const settings = await loadFolderDisplaySettings().catch(() => ({} as FolderDisplaySizeSettings));
+      setDisplaySettings(settings);
+
       setNodes(data);
       setDrillFolderId(restoredDrillFolderId);
       setLoading(false);
-      loadFolderDisplaySettings().then(settings => {
-        setDisplaySettings(settings);
-        const allIds = new Set<string>();
-        (function collect(ns: CardTreeNode<BookmarkItem[]>[]) {
-          for (const n of ns) { allIds.add(n.id); collect(n.children); }
-        })(data);
-        cleanupOrphanedSettings(allIds).then(c => setDisplaySettings(c));
-      }).catch(() => {});
+
+      const allIds = new Set<string>();
+      (function collect(ns: CardTreeNode<BookmarkItem[]>[]) {
+        for (const n of ns) { allIds.add(n.id); collect(n.children); }
+      })(data);
+      cleanupOrphanedSettings(allIds).then(c => setDisplaySettings(c)).catch(() => {});
       loadTrash().then(setTrashItems).catch(() => {});
       loadNavRailOrder().then(setNavRailOrder).catch(() => {});
       loadSearchEngines().then(setSearchEngines).catch(() => {});
@@ -502,9 +566,13 @@ function NewTab() {
         e.preventDefault();
         searchRef.current?.focus();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      const isEngineSearchShortcut = e.key.toLowerCase() === 'f' && (
+        (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey ||
+        !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !isInput()
+      );
+      if (isEngineSearchShortcut) {
         e.preventDefault();
-        searchRef.current?.focus();
+        engineSearchRef.current?.focus();
       }
       if (e.key === 'Escape') {
         if (isInput()) { (document.activeElement as HTMLElement)?.blur(); return; }
@@ -514,18 +582,8 @@ function NewTab() {
        if (drillFolderId) { e.preventDefault(); drillToFolder(null); }
      }
 
-     // 全局 Tab（不含 Shift+Tab）：非输入框聚焦时切换搜索模式并聚焦输入框
-     // Shift+Tab 保留原生焦点遍历，避免键盘导航被阻断
-     if (e.key === 'Tab' && !e.shiftKey && !isInput()) {
-       e.preventDefault();
-       searchRef.current?.toggleMode();
-       return;
-     }
-
       // ArrowDown/Up from search input → resume from last focused or start from first
-     if (isInput() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-        // 引擎模式下方向键交给输入框自身处理（光标移动/历史导航）
-        if (searchModeRef.current === 'engine') return;
+     if (searchRef.current?.isInputActive() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
        e.preventDefault();
         const allEls = document.querySelectorAll<HTMLElement>('[data-bookmark-item-id]');
         if (allEls.length > 0) {
@@ -928,11 +986,6 @@ function NewTab() {
     rubberBandOriginRef.current = null;
   }, []);
 
-  const handlePageGestureIntent = useCallback(() => {
-    finishRubberBand();
-    clearSelection();
-  }, [clearSelection, finishRubberBand]);
-
   useEffect(() => {
     const sub = bookmarkDragStart$.current.subscribe(start => {
       dragSessionRef.current?.moveSub.unsubscribe();
@@ -962,8 +1015,8 @@ function NewTab() {
           if (clientY < EDGE_ZONE) delta = -SCROLL_SPEED * (1 - clientY / EDGE_ZONE);
           else if (clientY > vh - EDGE_ZONE) delta = SCROLL_SPEED * (1 - (vh - clientY) / EDGE_ZONE);
           if (delta) {
-            // 分页后书签页在 .newtab-page 内滚动，不能继续滚动 window。
-            const pageScroller = document.querySelector<HTMLElement>('.newtab-page[data-page-id="bookmarks"] .newtab-page-body');
+            // 书签页主体自身滚动，不能继续滚动 window。
+            const pageScroller = document.querySelector<HTMLElement>('.newtab-page-body');
             if (pageScroller) pageScroller.scrollTop += delta;
             else window.scrollBy(0, delta);
             scrollRaf = requestAnimationFrame(tick);
@@ -1595,16 +1648,7 @@ function NewTab() {
     : undefined;
 
   const hasNavSidebar = !isSearching && orderedNavItems.length > 0;
-  const showNavSidebar = activePageId === 'bookmarks' && hasNavSidebar;
-
-  useEffect(() => {
-    if (activePageId === 'bookmarks') return;
-    searchRef.current?.clear();
-    query$.current.next('');
-    setSearchQuery('');
-    clearSelection();
-    setShowTrash(false);
-  }, [activePageId, clearSelection]);
+  const showNavSidebar = hasNavSidebar;
 
   const bookmarksHeader = (
           <div className="newtab-header">
@@ -1618,7 +1662,7 @@ function NewTab() {
                 <h1 className="newtab-title">CardTree</h1>
               </div>
               <div className="newtab-header-search">
-                <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} onModeChange={setSearchMode} />
+                <SearchBar ref={searchRef} onQueryChange={q => query$.current.next(q)} />
               </div>
               <div className="header-actions" style={{ position: 'relative' }}>
                 <a className="header-btn" href="https://github.com/Dcx199302/cardtree-bookmarks-ext" target="_blank" aria-label="GitHub 仓库" rel="noopener noreferrer"
@@ -1730,7 +1774,7 @@ function NewTab() {
       prefocusedBookmarkId,
       setPrefocusedBookmarkId,
     }}>
-      <div className={`newtab${isBookmarkDragging ? ' newtab--bookmark-dragging' : ''}${hasNavSidebar ? ' newtab--nav-sidebar' : ''}${selectedBackgroundUrl ? ' newtab--custom-background' : ''}`}
+      <div className={`newtab${isBookmarkDragging ? ' newtab--bookmark-dragging' : ''}${hasNavSidebar ? ' newtab--nav-sidebar' : ''}${showNavSidebar ? ' newtab--utility-rail' : ''}${selectedBackgroundUrl ? ' newtab--custom-background' : ''}`}
         style={backgroundStyle} onContextMenu={handleAreaContext} onClick={(e) => {
         const target = e.target as HTMLElement;
         if (!target.closest('[data-bookmark-item="true"]') && selectedIds.size > 0) {
@@ -1738,59 +1782,40 @@ function NewTab() {
         }
       }}>
         {selectedBackgroundUrl && <div className="newtab-background" style={{ backgroundImage: `url("${selectedBackgroundUrl}")` }} aria-hidden="true" />}
-        <PageCarousel
-          order={pageOrder}
-          activePageId={activePageId}
-          gestureDisabled={isBookmarkDragging}
-          onActivePageChange={setActivePageId}
-          onOrderChange={reorderPageOrder}
-          onGestureIntent={handlePageGestureIntent}
-          renderPage={(pageId) => {
-            if (pageId === 'bookmarks') {
-              return (
-                <div className="newtab-page-frame">
-                  {bookmarksHeader}
-                  <div className="newtab-page-body">
-                    <main className="newtab-content">
-                      <RootBookmarksCard sections={sortedRootSections} recentVisits={recentVisits} isSearching={!!searchQuery} />
-                      <FolderDrillBreadcrumb path={drillBreadcrumbPath} onSelect={selectFromBreadcrumb} />
-                      {sortedSubNodes.length > 0 ? (
-                        <div className="folder-drill-tree" onPointerDown={handleTreePointerDown}>
-                          <CardTree
-                            className={suppressAnim ? 'suppress-init-anim' : undefined}
-                            ref={treeRef}
-                            nodes={sortedSubNodes}
-                            appearance={false}
-                            renderNode={(node) => <BookmarkFolderCard node={node} bookmarks={bookmarkDataMap.get(node.sourceId) ?? []} />}
-                            selectable={false}
-                            dragDrop={dragDropConfig}
-                            onExpandCollapse={handleExpandCollapse}
-                            onNodeUpdate={(nodeId, updates) => {
-                              if (updates.label) chrome.bookmarks.update(nodeId, { title: updates.label });
-                            }}
-                            keyboardNavigation
-                            virtualization
-                            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-                          />
-                        </div>
-                      ) : hasNoResults ? (
-                        <div className="search-empty">未找到匹配的书签</div>
-                      ) : null}
-                    </main>
-                  </div>
-                  <NavRail items={orderedNavItems} hidden={!showNavSidebar} activeId={currentDrillFolder?.id ?? null} onClickItem={handleNavRailClick} onReorder={handleNavRailReorder} />
+        <div className="newtab-page-frame">
+          {bookmarksHeader}
+          <div ref={pageBodyRef} className="newtab-page-body">
+            <main className="newtab-content">
+              <RootBookmarksCard sections={sortedRootSections} recentVisits={recentVisits} isSearching={!!searchQuery} />
+              <InlineSearch ref={engineSearchRef} engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} />
+              <FolderDrillBreadcrumb path={drillBreadcrumbPath} onSelect={selectFromBreadcrumb} />
+              {sortedSubNodes.length > 0 ? (
+                <div className="folder-drill-tree" onPointerDown={handleTreePointerDown}>
+                  <CardTree
+                    className={suppressAnim ? 'suppress-init-anim' : undefined}
+                    ref={treeRef}
+                    nodes={sortedSubNodes}
+                    appearance={false}
+                    renderNode={(node) => <BookmarkFolderCard node={node} bookmarks={bookmarkDataMap.get(node.sourceId) ?? []} />}
+                    selectable={false}
+                    dragDrop={dragDropConfig}
+                    onExpandCollapse={handleExpandCollapse}
+                    onNodeUpdate={(nodeId, updates) => {
+                      if (updates.label) chrome.bookmarks.update(nodeId, { title: updates.label });
+                    }}
+                    keyboardNavigation
+                    virtualization
+                    style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                  />
                 </div>
-              );
-            }
-            return (
-              <div className="newtab-page-frame">
-                <div className="newtab-page-body">
-                  <WorkspacePage engines={visibleEngines} onOpenEngineSettings={() => setShowEngineSettings(true)} />
-                </div>
-              </div>
-            );
-          }}
-        />
+              ) : hasNoResults ? (
+                <div className="search-empty">未找到匹配的书签</div>
+              ) : null}
+            </main>
+          </div>
+          <NavRail items={orderedNavItems} hidden={!showNavSidebar} activeId={currentDrillFolder?.id ?? null} onClickItem={handleNavRailClick} onReorder={handleNavRailReorder} />
+          <BookmarkUtilitiesRail hidden={!showNavSidebar} />
+        </div>
       </div>
 
       {menuState && (

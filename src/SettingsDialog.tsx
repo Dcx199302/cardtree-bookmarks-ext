@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BackgroundSettingsSection } from './BackgroundSettingsSection';
 import type { BackgroundSettings } from './backgroundSettingsStore';
 import type { CustomBackgroundView } from './customBackgroundStore';
+import { useDialogEscape } from './useDialogEscape';
 
 interface SettingsDialogProps {
   backgroundSettings: BackgroundSettings;
@@ -46,22 +47,14 @@ export function SettingsDialog({
   const [activeId, setActiveId] = useState(sections[0]!.id);
   const activeSection = sections.find(section => section.id === activeId) ?? sections[0]!;
 
+  useDialogEscape(onClose);
+
   useEffect(() => {
     closeRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, []);
 
   return (
-    <div
-      className="dialog-backdrop settings-backdrop"
-      onMouseDown={event => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
+    <div className="dialog-backdrop settings-backdrop">
       <section
         className="dialog-card settings-card"
         role="dialog"

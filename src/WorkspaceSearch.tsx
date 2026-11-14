@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent } from 'react';
 import { buildSearchUrl, type SearchEngine } from './searchEnginesStore';
 import { addSearchHistory, loadLastEngineId, saveLastEngineId } from './searchHistoryStore';
 import { FaviconImg } from './FaviconImg';
@@ -6,11 +6,24 @@ import { FaviconImg } from './FaviconImg';
 interface WorkspaceSearchProps {
   engines: SearchEngine[];
   onOpenEngineSettings: () => void;
+  className?: string;
+  ariaLabel?: string;
+  shortcutLabel?: string;
 }
 
-export function WorkspaceSearch({ engines, onOpenEngineSettings }: WorkspaceSearchProps) {
+export interface WorkspaceSearchRef {
+  focus: () => void;
+}
+
+export const WorkspaceSearch = forwardRef<WorkspaceSearchRef, WorkspaceSearchProps>(
+function WorkspaceSearch({ engines, onOpenEngineSettings, className, ariaLabel = '工作台搜索', shortcutLabel }, ref) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [selectedEngineId, setSelectedEngineId] = useState<string | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+  }), []);
 
   useEffect(() => {
     loadLastEngineId().then(id => setSelectedEngineId(id)).catch(() => {});
@@ -40,8 +53,8 @@ export function WorkspaceSearch({ engines, onOpenEngineSettings }: WorkspaceSear
   };
 
   return (
-    <section className="workspace-search" aria-label="工作台搜索">
-      <form className="workspace-search__form" onSubmit={handleSubmit}>
+    <section className={`workspace-search${className ? ` ${className}` : ''}`} aria-label={ariaLabel}>
+      <form className={`workspace-search__form${shortcutLabel ? ' workspace-search__form--with-shortcut' : ''}`} onSubmit={handleSubmit}>
         <span className="workspace-search__current-engine" title={selectedEngine?.name}>
           {selectedEngine
             ? <FaviconImg url={selectedEngine.iconUrl ?? selectedEngine.searchUrl} />
@@ -53,12 +66,14 @@ export function WorkspaceSearch({ engines, onOpenEngineSettings }: WorkspaceSear
               )}
         </span>
         <input
+          ref={inputRef}
           type="text"
           value={query}
           placeholder="搜索…"
-          aria-label="工作台搜索"
+          aria-label={ariaLabel}
           onChange={event => setQuery(event.target.value)}
         />
+        {shortcutLabel && <kbd className="workspace-search__shortcut" aria-hidden="true">{shortcutLabel}</kbd>}
         <button type="submit" aria-label="搜索或打开搜索引擎" title="搜索或打开搜索引擎">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M5 12h13M13 6l6 6-6 6" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
@@ -105,4 +120,4 @@ export function WorkspaceSearch({ engines, onOpenEngineSettings }: WorkspaceSear
       </div>
     </section>
   );
-}
+});

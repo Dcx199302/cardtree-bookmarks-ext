@@ -232,7 +232,7 @@ function NavRail({ items, hidden, activeId, onClickItem, onReorder }: NavRailPro
           title="回到顶部"
           aria-label="回到顶部"
           onClick={() => {
-            const pageScroller = document.querySelector<HTMLElement>('.newtab-page[data-page-id="bookmarks"] .newtab-page-body');
+            const pageScroller = document.querySelector<HTMLElement>('.newtab-page-body');
             if (pageScroller) pageScroller.scrollTo({ top: 0, behavior: 'smooth' });
             else window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
@@ -248,10 +248,12 @@ function NavRail({ items, hidden, activeId, onClickItem, onReorder }: NavRailPro
           {items.map((item, i) => {
             const isRoot = item.kind === 'root';
             const isActive = activeId === item.id;
+            const isGroupBoundary = canReorder && i > 0 && items[i - 1]!.kind !== item.kind;
             const classes = [
               'nav-rail__item',
               isRoot ? ' nav-rail__item--root' : '',
               isActive ? ' nav-rail__item--active' : '',
+              isGroupBoundary ? ' nav-rail__item--group-separator' : '',
             ].filter(Boolean).join(' ');
             return (
               <button
