@@ -247,6 +247,9 @@ body {
   overscroll-behavior-x: none;
   --shell-left: 16px;
   --nav-width: 216px;
+  --rail-inset: 24px;
+  --rail-main-gap: 16px;
+  --main-inline-padding: 20px;
   --main-width: min(1160px, calc(100% - 32px));
   --main-left: calc((100% - var(--main-width)) / 2);
   margin: 0 auto;
@@ -337,7 +340,7 @@ body {
   width: 100%;
   min-width: 0;
   margin: 0;
-  /* 背景全幅铺开；内部内容保持原有 1160px 居中布局。 */
+  /* 背景全幅铺开；窄屏保持居中，桌面断点下随窗口铺开。 */
   padding: 8px max(20px, calc((100% - 1160px) / 2));
   border: 0;
   border-radius: 0;
@@ -422,13 +425,20 @@ body {
   background: var(--bg-hover);
 }
 
+@media (min-width: 1200px) {
+  .newtab-header__inner {
+    padding-left: var(--rail-inset);
+    padding-right: var(--rail-inset);
+  }
+}
+
 .newtab-content {
   flex: 1;
   width: var(--main-width);
   max-width: 100%;
   min-width: 0;
   margin-left: var(--main-left);
-  padding: 20px 20px 96px;
+  padding: 20px var(--main-inline-padding) 96px;
 }
 
 /* 单页布局：书签页主体独立滚动。 */
@@ -449,6 +459,13 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
+  scrollbar-color: var(--text-muted) transparent;
+}
+
+.newtab-page-body::-webkit-scrollbar,
+.newtab-page-body::-webkit-scrollbar-track,
+.newtab-page-body::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .newtab-page-body > .newtab-content {
@@ -2172,14 +2189,17 @@ body {
 /* ── Responsive folder navigation ── */
 .newtab--nav-sidebar {
   padding-left: 0;
-  --main-left: max(calc(var(--nav-width) + 32px), calc((100% - 1160px) / 2));
+  --main-left: max(
+    calc(var(--rail-inset) + var(--nav-width) + var(--rail-main-gap) - var(--main-inline-padding)),
+    calc((100% - 1160px) / 2)
+  );
   --main-width: min(1160px, calc(100% - var(--main-left) - 16px));
 }
 
 .nav-rail {
   position: fixed;
   flex-direction: column;
-  left: max(36px, calc((100% - 1160px) / 2 + 4px - var(--nav-width)));
+  left: max(var(--rail-inset), calc((100vw - 1360px) / 2 - var(--nav-width) - 12px));
   top: var(--side-rail-top, 76px);
   bottom: 16px;
   z-index: 40;
@@ -4614,7 +4634,7 @@ a:focus-visible {
   top: var(--side-rail-top, 76px);
   bottom: 16px;
   left: auto;
-  right: max(36px, calc((100% - 1160px) / 2 + 4px - var(--nav-width)));
+  right: max(var(--rail-inset), calc((100vw - 1360px) / 2 - var(--nav-width) - 12px));
   z-index: 40;
   display: none;
   width: 216px;
@@ -4792,8 +4812,12 @@ a:focus-visible {
   }
 
   .newtab--nav-sidebar.newtab--utility-rail {
-    --utility-inset: calc(max(36px, calc((100% - 1160px) / 2 + 4px - var(--nav-width))) + var(--nav-width));
-    --main-width: min(1160px, calc(100% - var(--main-left) - var(--utility-inset) - 16px));
+    /* 页面主体预留了纵向滚动条宽度；用 100vw 与两侧绝对定位栏保持同一视口基准。 */
+    --main-left: max(
+      calc(var(--rail-inset) + var(--nav-width) + var(--rail-main-gap) - var(--main-inline-padding)),
+      calc((100vw - 1360px) / 2)
+    );
+    --main-width: min(1360px, calc(100vw - var(--main-left) - var(--main-left)));
   }
 }
 
@@ -5171,29 +5195,17 @@ a.utility-dialog__tab-row:focus-visible {
   }
 }
 
-/* 超大屏：中间内容最大宽度从 1160px 增加到 1360px，并保持左右卡片对称。 */
+/* 超大屏：中间内容限制为 1360px，并保持左右卡片对称。 */
 @media (min-width: 1888px) {
   .newtab {
     --main-width: 1360px;
-    --main-left: calc((100% - 1360px) / 2);
+    --main-left: calc((100vw - 1360px) / 2);
   }
 
   .newtab--nav-sidebar,
   .newtab--nav-sidebar.newtab--utility-rail {
-    --main-left: calc((100% - 1360px) / 2);
+    --main-left: calc((100vw - 1360px) / 2);
     --main-width: 1360px;
   }
 
-  .newtab-header__inner {
-    padding-left: max(20px, calc((100% - 1360px) / 2));
-    padding-right: max(20px, calc((100% - 1360px) / 2));
-  }
-
-  .nav-rail {
-    left: max(36px, calc((100% - 1360px) / 2 - var(--nav-width) - 12px));
-  }
-
-  .utility-rail {
-    right: max(36px, calc((100% - 1360px) / 2 - var(--nav-width) - 12px));
-  }
 }
